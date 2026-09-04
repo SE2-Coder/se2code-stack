@@ -1,0 +1,108 @@
+services:
+  # ============================================================================
+  # NGINX 1.27 - Reverse Proxy, FastCGI Cache & SSL Terminator
+  # ============================================================================
+  nginx:
+    image: nginx:1.27-alpine
+    container_name: wp-nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/fastcgi_params:/etc/nginx/fastcgi_params:ro
+      - ./nginx/conf.d:/etc/nginx/conf.d
+      - ./nginx/snippets:/etc/nginx/snippets:ro
+      - ./nginx/certs:/etc/nginx/certs:ro
+      - ./wp-data:/var/www/html
+      - ./nginx/logs:/var/log/nginx
+      - nginx-cache:/var/cache/nginx
+    networks:
+      - wp-network
+    depends_on:
+      - php84
+      - php85
+      - mariadb
+      - redis
+
+  # ============================================================================
+  # PHP 8.4-FPM - Multi-Pools (Puertos TCP 9001, 9002...)
+  # ============================================================================
+  php84:
+    build:
+      context: ./php/php84
+      dockerfile: Dockerfile
+    container_name: wp-php84
+    restart: unless-stopped
+    volumes:
+      - ./wp-data:/var/www/html
+      - ./php/php84/php.ini:/usr/local/etc/php/php.ini:ro
+      - ./php/php84/zz-pools.conf:/usr/local/etc/php-fpm.d/zz-pools.conf:ro
+      - ./php/php84/pools:/usr/local/etc/php-fpm.d/pools
+      - ./php/php84/logs:/var/log/php
+      - nginx-cache:/var/cache/nginx
+    networks:
+      - wp-network
+    depends_on:
+      - mariadb
+      - redis
+
+  # ============================================================================
+  # PHP 8.5-FPM - Multi-Pools (Puertos TCP 9001, 9002...)
+  # ============================================================================
+  php85:
+    build:
+      context: ./php/php85
+      dockerfile: Dockerfile
+    container_name: wp-php85
+    restart: unless-stopped
+    volumes:
+      - ./wp-data:/var/www/html
+      - ./php/php85/php.ini:/usr/local/etc/php/php.ini:ro
+      - ./php/php85/zz-pools.conf:/usr/local/etc/php-fpm.d/zz-pools.conf:ro
+      - ./php/php85/pools:/usr/local/etc/php-fpm.d/pools
+      - ./php/php85/logs:/var/log/php
+      - nginx-cache:/var/cache/nginx
+    networks:
+      - wp-network
+    depends_on:
+      - mariadb
+      - redis
+
+  # ============================================================================
+  # MARIADB 11.4 - Motor de Base de Datos
+  # ============================================================================
+  mariadb:
+    image: mariadb:11.4
+    container_name: mariadb
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+    volumes:
+      - ./mariadb/data:/var/lib/mysql
+      - ./mariadb/my.cnf:/etc/mysql/conf.d/my.cnf:ro
+    networks:
+      - wp-network
+
+  # ============================================================================
+  # REDIS 7 - Object Cache en Memoria RAM
+  # ============================================================================
+  redis:
+    image: redis:7-alpine
+    container_name: redis
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes", "--maxmemory", "256mb", "--maxmemory-policy", "allkeys-lru"]
+    volumes:
+      - ./redis/data:/data
+    networks:
+      - wp-network
+
+networks:
+  wp-network:
+    name: wp-network
+    driver: bridge
+
+volumes:
+  nginx-cache:
+    name: wp-nginx-cache

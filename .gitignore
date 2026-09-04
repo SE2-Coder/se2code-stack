@@ -1,0 +1,61 @@
+# ==============================================================================
+# se2Code Stack Server - Anti-Anxiety .gitignore
+# Regla de oro: En Git SOLO vive el CÓDIGO y la INFRAESTRUCTURA (DevOps).
+# NUNCA se suben datos de clientes, contraseñas, bases de datos ni cachés.
+# ==============================================================================
+
+# 1. Variables de Entorno y Secretos Criptográficos
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.crt
+*.csr
+certs/
+modules/wordpress/certs/
+
+# 2. Datos Dinámicos y Contenido de WordPress (Clientes)
+wp-data/
+modules/wordpress/wp-data/
+*.sql
+*.sql.gz
+
+# 3. Base de Datos MariaDB y Redis
+mariadb/data/
+modules/wordpress/mariadb/data/
+dump.rdb
+
+# 4. Copias de Seguridad (Backups)
+backups/
+modules/wordpress/backups/
+*.tar.gz
+*.zip
+*.bak
+
+# 5. WireGuard VPN (Llaves privadas y configuraciones de clientes)
+modules/wireguard/config/
+wg0.conf
+
+# 6. Registros (Logs) y Caché de Servidor
+*.log
+logs/
+nginx/logs/
+php/logs/
+fastcgi_temp/
+client_body_temp/
+proxy_temp/
+
+# 7. Basura del Sistema Operativo e IDEs
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*~
+scratch/

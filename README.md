@@ -5,18 +5,40 @@
 
 ---
 
-## 🎯 ¿Qué es se2Code Stack Server?
+## 🚀 Instalación en 1 Solo Comando (Estilo CyberPanel / Coolify)
 
-**se2Code Stack Server** es un stack modular de infraestructura como código (IaC) en contenedores Docker y scripts Bash automatizados. Permite desplegar y administrar servidores de producción en segundos con estándares de alta gama:
+Para desplegar todo el stack en un servidor virgen (Ubuntu 22.04 / 24.04 o Debian 12), entra por SSH como `root` y pega este comando único:
 
-* 🚀 **Nginx 1.27 Mainline** con FastCGI Cache de alto rendimiento, compresión Gzip, HTTP/2 y optimización especial para **Elementor, WooCommerce y WP-Admin** (bypass automático de caché, buffers ampliados de 128k/256k y protección contra errores 503/413).
-* ⚡ **Dual PHP-FPM Pools aislados (PHP 8.4 y PHP 8.5)** basados en Alpine Linux con extensiones compiladas (Redis, GD, Imagick, OPcache JIT, MariaDB client) y sockets dedicados por sitio.
-* 🐬 **MariaDB 11.4 LTS** afinada para baja latencia con almacenamiento persistente.
-* 🧠 **Redis 7 In-Memory Cache** para Object Caching ultra-rápido en WordPress.
-* 🛡️ **WireGuard VPN Server** integrado a nivel de host con reglas UFW NAT dinámicas para gestión privada segura.
-* 📊 **Perfilador de Hardware Automático**: Detecta CPU, RAM y Swap, recomendando la cantidad máxima segura de sitios WordPress para evitar caídas por sobrecarga.
-* 💾 **Gestor de Swap Automático**: Crea y afina archivos Swap (2 GB / swappiness=10) para proteger la RAM ante picos de tráfico.
-* 🎛️ **CLI Global `se2code`**: Menú TUI interactivo para gestionar sitios, cambiar versiones PHP en 1 segundo, generar backups granulares y monitorear el servidor.
+```bash
+bash <(curl -sSL https://raw.githubusercontent.com/TU-USUARIO/se2code-stack/main/install.sh)
+```
+
+*(O si prefieres el método de tubería tradicional)*:
+```bash
+curl -sSL https://raw.githubusercontent.com/TU-USUARIO/se2code-stack/main/install.sh | bash
+```
+
+### ¿Qué hace este comando automáticamente?
+1. 🔍 **Prepara el sistema**: Instala silenciosamente `git`, `curl` y certificados seguros si no están presentes.
+2. 📦 **Descarga el stack**: Clona la versión optimizada en `/opt/se2code-stack`.
+3. 📊 **Diagnostica el hardware**: Evalúa núcleos de CPU, RAM libre, Swap y disco, calculando cuántos WordPress soporta el servidor de forma segura.
+4. 🛡️ **Protege la memoria**: Si detecta menos de 1 GB de Swap, te ofrece crear automáticamente un archivo Swap de 2 GB (`swappiness=10`) para prevenir caídas por Out-Of-Memory (OOM).
+5. 🐳 **Instala Docker Engine y Compose**: Configura la última versión oficial de Docker y el firewall UFW.
+6. 🎯 **Asistente interactivo**: Te pregunta qué módulos deseas activar (**WordPress**, **WireGuard VPN** o **Ambos**).
+7. 🌐 **Aprovisiona sitios**: Te permite crear 0, 1 o múltiples sitios WordPress de inmediato (o crearlos después) con soporte para certificados SSL de Cloudflare.
+8. 🎛️ **Instala la CLI `se2code`**: Deja activo el comando global `se2code` para que administres todo desde cualquier terminal.
+
+---
+
+## 🎯 ¿Qué incluye la Suite?
+
+* 🚀 **Nginx 1.27 Mainline**: Con FastCGI Cache de alto rendimiento, compresión Gzip, HTTP/2 y optimización especial para **Elementor, WooCommerce y WP-Admin** (bypass automático de caché, buffers de 128k/256k y subida de archivos de hasta 256 MB para evitar errores 503 y 413).
+* ⚡ **Dual PHP-FPM Pools aislados (PHP 8.4 y PHP 8.5)**: Basados en Alpine Linux ultraligeros con OPcache JIT, extensiones compiladas (Redis, GD, Imagick, MariaDB client) y sockets dedicados por sitio.
+* 🐬 **MariaDB 11.4 LTS**: Afinada para baja latencia con almacenamiento persistente.
+* 🧠 **Redis 7 In-Memory Cache**: Para Object Caching ultra-rápido en WordPress.
+* 🛡️ **WireGuard VPN Server**: Integrado a nivel de host con reglas UFW NAT dinámicas y puertos aleatorios seguros.
+* 💾 **Respaldos Granulares**: Motor de backup por sitio (Full, Solo Base de Datos `.sql.gz`, o Solo Archivos `.tar.gz`).
+* 🎛️ **CLI Global `se2code`**: Menú TUI interactivo para gestionar sitios, cambiar versiones PHP en 1 segundo y monitorear el servidor.
 
 ---
 
@@ -24,6 +46,8 @@
 
 ```text
 se2code-stack/
+├── install.sh                   # Instalador Web One-Liner (curl | bash)
+├── deploy.sh                    # Script maestro de aprovisionamiento
 ├── bin/
 │   └── se2code                  # CLI interactivo global de gestión
 ├── core/
@@ -44,33 +68,8 @@ se2code-stack/
 │       └── setup-vpn.sh         # Setup interactivo con puerto dinámico y UFW
 ├── .env.example                 # Variables de entorno de referencia
 ├── .gitignore                   # Exclusión anti-ansiedad de datos de clientes
-├── deploy.sh                    # Script maestro de aprovisionamiento
 └── README.md                    # Documentación
 ```
-
----
-
-## 🚀 Despliegue Rápido (En un nuevo Servidor Ubuntu/Debian)
-
-### 1. Conéctate a tu servidor como `root`:
-```bash
-ssh root@tu-servidor-ip
-```
-
-### 2. Clona el repositorio y ejecuta el instalador:
-```bash
-git clone https://github.com/TU-USUARIO/se2code-stack.git /opt/se2code-stack
-cd /opt/se2code-stack
-bash deploy.sh
-```
-
-El script interactivo te guiará paso a paso:
-1. Analizará el hardware (vCPU, RAM, Swap, Disco).
-2. Te sugerirá cuántos sitios WordPress soporta tu servidor de forma óptima.
-3. Te ofrecerá crear un archivo Swap si detecta poca memoria disponible.
-4. Instalará Docker, Docker Compose y configurará el firewall UFW.
-5. Te permitirá elegir qué instalar: **Solo WordPress**, **Solo WireGuard** o la **Suite Completa**.
-6. Te preguntará si deseas desplegar sitios WordPress de inmediato (o crearlos después).
 
 ---
 
@@ -98,7 +97,7 @@ se2code
 
 ---
 
-## 🛡️ Guía Git Anti-Ansiedad (Buenas Prácticas DevOps)
+## 🛡️ Filosofía Git Anti-Ansiedad (Buenas Prácticas DevOps)
 
 Muchos desarrolladores sienten frustración cuando Git les advierte constantemente de "archivos modificados" en el servidor. 
 

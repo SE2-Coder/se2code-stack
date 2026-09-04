@@ -10,12 +10,12 @@
 Para desplegar todo el stack en un servidor virgen (Ubuntu 22.04 / 24.04 o Debian 12), entra por SSH como `root` y pega este comando único:
 
 ```bash
-bash <(curl -sSL https://raw.githubusercontent.com/TU-USUARIO/se2code-stack/main/install.sh)
+bash <(curl -sSL https://raw.githubusercontent.com/SE2-Coder/se2code-stack/main/install.sh)
 ```
 
 *(O si prefieres el método de tubería tradicional)*:
 ```bash
-curl -sSL https://raw.githubusercontent.com/TU-USUARIO/se2code-stack/main/install.sh | bash
+curl -sSL https://raw.githubusercontent.com/SE2-Coder/se2code-stack/main/install.sh | bash
 ```
 
 ### ¿Qué hace este comando automáticamente?

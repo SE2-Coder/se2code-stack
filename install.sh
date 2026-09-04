@@ -3,9 +3,9 @@
 # se2Code Stack Server - One-Liner Web Installer (Estilo CyberPanel / Coolify)
 # ==============================================================================
 # Uso:
-#   curl -sSL https://raw.githubusercontent.com/TU-USUARIO/se2code-stack/main/install.sh | bash
+#   curl -sSL https://raw.githubusercontent.com/SE2-Coder/se2code-stack/main/install.sh | bash
 #   o
-#   bash <(curl -sSL https://raw.githubusercontent.com/TU-USUARIO/se2code-stack/main/install.sh)
+#   bash <(curl -sSL https://raw.githubusercontent.com/SE2-Coder/se2code-stack/main/install.sh)
 # ==============================================================================
 set -e
 
@@ -52,7 +52,7 @@ fi
 
 # 3. Configuración del directorio de destino
 INSTALL_DIR="/opt/se2code-stack"
-REPO_URL="https://github.com/TU-USUARIO/se2code-stack.git"
+REPO_URL="https://github.com/SE2-Coder/se2code-stack.git"
 BRANCH="main"
 
 echo -e "${C_CYAN}[2/3] Descargando la suite de infraestructura en ${INSTALL_DIR}...${C_RESET}"

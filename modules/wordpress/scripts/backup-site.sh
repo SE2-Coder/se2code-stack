@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ==============================================================================
-# se2Code Stack Server - WordPress: Motor de Backups Granulares
+# se2Code Stack Server - WordPress: Motor de Backups Granulares (Soporta Multilenguaje)
 # ==============================================================================
 set -euo pipefail
 
@@ -44,8 +44,8 @@ fi
 # 2. Seleccionar tipo de backup
 if [ -z "$BACKUP_TYPE" ]; then
     echo -e "\n${C_BOLD}[?] ¿Qué tipo de respaldo deseas generar?${C_RESET}"
-    echo -e "    1) 📦 Backup COMPLETO (Base de datos + Archivos web)"
-    echo -e "    2) 🗄️  Solo Base de Datos (.sql.gz)"
+    echo -e "    1) 📦 Backup COMPLETO (Todas las Bases de datos + Archivos web)"
+    echo -e "    2) 🗄️  Solo Bases de Datos (.sql.gz de todas las instancias del sitio)"
     echo -e "    3) 📁 Solo Archivos Web (.tar.gz sin cachés)"
     read -r -p "Opción [1-3]: " TYPE_OPT
     case "$TYPE_OPT" in
@@ -64,16 +64,24 @@ do_single_backup() {
 
     log_step "Generando respaldo de [$SLUG] (Tipo: $TYPE)..."
 
-    # Base de datos
+    # Bases de datos (Detecta automáticamente si tiene sub-bases de datos por idioma)
     if [ "$TYPE" = "full" ] || [ "$TYPE" = "db" ]; then
-        DB_NAME="wp_${SLUG}_db"
-        DB_FILE="$TARGET_DIR/${SLUG}_db_${DATE_TAG}.sql.gz"
         MARIADB_ROOT_PASS=$(grep -E "^MYSQL_ROOT_PASSWORD=" "$STACK_ROOT/.env" 2>/dev/null | cut -d= -f2 || echo "root_secret")
+        
+        # Buscar todas las bases de datos del sitio (ej: wp_misterloans_db, wp_misterloans_es_db, etc.)
+        MATCHED_DBS=$(docker exec mariadb mariadb -u root -p"$MARIADB_ROOT_PASS" --skip-ssl -e "SHOW DATABASES LIKE 'wp\_${SLUG}\_%';" 2>/dev/null | grep -E "^wp_${SLUG}_" || true)
+        
+        if [ -z "$MATCHED_DBS" ]; then
+            MATCHED_DBS="wp_${SLUG}_db"
+        fi
 
-        log_info "Exportando y comprimiendo base de datos ($DB_NAME)..."
-        docker exec mariadb mariadb-dump -u root -p"$MARIADB_ROOT_PASS" --skip-ssl --single-transaction --quick "$DB_NAME" 2>/dev/null | gzip > "$DB_FILE"
-        DB_SIZE=$(du -h "$DB_FILE" | cut -f1)
-        log_ok "Base de datos respaldada: $(basename "$DB_FILE") ($DB_SIZE)"
+        for current_db in $MATCHED_DBS; do
+            DB_FILE="$TARGET_DIR/${current_db}_${DATE_TAG}.sql.gz"
+            log_info "Exportando y comprimiendo base de datos ($current_db)..."
+            docker exec mariadb mariadb-dump -u root -p"$MARIADB_ROOT_PASS" --skip-ssl --single-transaction --quick "$current_db" 2>/dev/null | gzip > "$DB_FILE"
+            DB_SIZE=$(du -h "$DB_FILE" | cut -f1)
+            log_ok "Base de datos respaldada: $(basename "$DB_FILE") ($DB_SIZE)"
+        done
     fi
 
     # Archivos Web

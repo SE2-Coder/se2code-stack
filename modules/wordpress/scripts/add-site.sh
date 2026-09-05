@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ==============================================================================
-# se2Code Stack Server - WordPress: Aprovisionador de Sitios
+# se2Code Stack Server - WordPress: Aprovisionador de Sitios (Estándar o Multilenguaje)
 # ==============================================================================
 set -euo pipefail
 
@@ -8,28 +8,29 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 STACK_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 WP_STACK_ROOT="$(cd "$STACK_ROOT/../.." && pwd)"
 
-# Cargar utilidades si existen
+# Cargar utilidades
 [ -f "$WP_STACK_ROOT/core/banner.sh" ] && source "$WP_STACK_ROOT/core/banner.sh"
 
 SITE_SLUG="${1:-}"
 DOMAIN="${2:-}"
 PHP_VERSION="${3:-}"
 
-# Modo interactivo si faltan argumentos
+# Modo interactivo
 if [ -z "$SITE_SLUG" ]; then
-    echo -e "${C_BOLD}${C_CYAN}--- Aprovisionamiento de Nuevo Sitio WordPress ---${C_RESET}"
-    read -r -p "Identificador / Slug del sitio (ej: clinicaerika): " SITE_SLUG
+    echo -e "${C_BOLD}${C_CYAN}--- Aprovisionamiento de Sitio WordPress ---${C_RESET}"
+    read -r -p "Identificador / Slug del sitio (ej: misterloans): " SITE_SLUG
 fi
 
 if [ -z "$DOMAIN" ]; then
-    read -r -p "Dominio principal (ej: skincarebeautyholic.com): " DOMAIN
+    read -r -p "Dominio principal (ej: dev.mister.loans): " DOMAIN
 fi
 
 if [ -z "$PHP_VERSION" ]; then
     echo -e "Selecciona la versión de PHP:"
     echo -e "  1) PHP 8.5 (Última generación - Recomendada)"
     echo -e "  2) PHP 8.4 (Estable)"
-    read -r -p "Opción [1-2]: " PHP_OPT
+    read -r -p "Opción [1-2, por defecto 1]: " PHP_OPT
+    PHP_OPT=${PHP_OPT:-1}
     if [ "$PHP_OPT" = "2" ]; then
         PHP_VERSION="8.4"
     else
@@ -40,6 +41,25 @@ fi
 # Sanitizar
 SITE_SLUG=$(echo "$SITE_SLUG" | tr '[:upper:]' '[:lower:]' | tr -cd 'a-z0-9_')
 DOMAIN=$(echo "$DOMAIN" | tr '[:upper:]' '[:lower:]' | tr -cd 'a-z0-9.-')
+
+# Preguntar por la Arquitectura (Estándar vs Multilenguaje / Subdirectorios)
+echo -e "\n${C_BOLD}[?] Selecciona el Tipo de Arquitectura para este Sitio:${C_RESET}"
+echo -e "    1) 🌐 Estándar (1 solo WordPress en la raíz /)"
+echo -e "    2) 🌍 Multilenguaje / Multi-Directorio (Home en raíz + subcarpetas independientes, ej: /es, /en)"
+read -r -p "Opción [1-2, por defecto 1]: " ARCH_CHOICE
+ARCH_CHOICE=${ARCH_CHOICE:-1}
+
+SUB_LANGS=()
+if [ "$ARCH_CHOICE" = "2" ]; then
+    echo -e "\n${C_CYAN}Escribe los códigos de idioma o subcarpetas separados por espacio [ej: es en]:${C_RESET}"
+    read -r -p "Subcarpetas [por defecto: es en]: " LANGS_INPUT
+    LANGS_INPUT=${LANGS_INPUT:-"es en"}
+    for l in $LANGS_INPUT; do
+        clean_lang=$(echo "$l" | tr '[:upper:]' '[:lower:]' | tr -cd 'a-z0-9_')
+        [ -n "$clean_lang" ] && SUB_LANGS+=("$clean_lang")
+    done
+    log_ok "Arquitectura configurada: Home (/) + ${#SUB_LANGS[@]} instancias (${SUB_LANGS[*]})."
+fi
 
 if [ "$PHP_VERSION" = "8.4" ]; then
     PHP_CONTAINER="wp-php84"
@@ -73,7 +93,8 @@ mkdir -p "$CERTS_DIR"
 echo -e "\n${C_BOLD}[?] ¿Cómo deseas configurar el SSL para $DOMAIN?${C_RESET}"
 echo -e "    1) Pegar los certificados de Cloudflare ahora mismo"
 echo -e "    2) Generar certificados autofirmados temporales (para cambiarlos después)"
-read -r -p "Opción [1-2]: " SSL_CHOICE
+read -r -p "Opción [1-2, por defecto 1]: " SSL_CHOICE
+SSL_CHOICE=${SSL_CHOICE:-1}
 
 if [ "$SSL_CHOICE" = "1" ]; then
     echo -e "\n${C_CYAN}Pega el Certificado de Origen (Origin Certificate) y escribe 'EOF' en una línea sola al terminar:${C_RESET}"
@@ -105,44 +126,57 @@ fi
 chmod 600 "$CERTS_DIR/privkey.pem"
 chmod 644 "$CERTS_DIR"/*.pem
 
-# 4. Generar Virtual Host NGINX
+# 4. Generar Virtual Host NGINX con bloques de subdirectorios
+VHOST_FILE="$STACK_ROOT/nginx/conf.d/${SITE_SLUG}.conf"
 sed -e "s/{{SITE_SLUG}}/$SITE_SLUG/g" \
     -e "s/{{DOMAIN}}/$DOMAIN/g" \
     -e "s/{{PHP_CONTAINER}}/$PHP_CONTAINER/g" \
     -e "s/{{PHP_PORT}}/$PHP_PORT/g" \
-    "$STACK_ROOT/templates/nginx-vhost.conf.tpl" > "$STACK_ROOT/nginx/conf.d/${SITE_SLUG}.conf"
-log_ok "Virtual Host NGINX generado en $STACK_ROOT/nginx/conf.d/${SITE_SLUG}.conf"
+    "$STACK_ROOT/templates/nginx-vhost.conf.tpl" > "$VHOST_FILE"
 
-# 5. Directorio web de WordPress
-SITE_WEB_DIR="$STACK_ROOT/wp-data/$SITE_SLUG"
-mkdir -p "$SITE_WEB_DIR"
-
-# Descargar WordPress si está vacío
-if [ ! -f "$SITE_WEB_DIR/wp-login.php" ]; then
-    log_info "Descargando WordPress Core..."
-    curl -sSL https://wordpress.org/latest.tar.gz | tar -xz -C "$SITE_WEB_DIR" --strip-components=1
-    log_ok "WordPress descargado."
+# Si es multilenguaje, insertar bloques location de subcarpetas antes de 'location /'
+if [ ${#SUB_LANGS[@]} -gt 0 ]; then
+    SUB_RULES=""
+    for lang in "${SUB_LANGS[@]}"; do
+        SUB_RULES="${SUB_RULES}\n    # Enrutamiento Sub-WordPress: /${lang}/\n    location /${lang}/ {\n        try_files \$uri \$uri/ /${lang}/index.php?\$args;\n    }\n"
+    done
+    # Insertar antes de 'location / {'
+    sed -i "s|location / {|${SUB_RULES}\n    location / {|" "$VHOST_FILE"
+    log_ok "Reglas de enrutamiento NGINX añadidas para: ${SUB_LANGS[*]}"
 fi
+log_ok "Virtual Host NGINX activo en $VHOST_FILE"
 
-# 6. Crear Base de Datos en MariaDB
-DB_NAME="wp_${SITE_SLUG}_db"
-DB_USER="wp_${SITE_SLUG}_user"
-DB_PASS=$(openssl rand -base64 18 | tr -dc 'a-zA-Z0-9' | head -c 16)
+# Función auxiliar para crear y configurar una instancia de WordPress
+setup_wp_instance() {
+    local INSTANCE_DIR="$1"
+    local INSTANCE_NAME="$2"
+    local DB_SUFFIX="$3"
+    local REDIS_SUBPREFIX="$4"
 
-# Obtener password root de mariadb
-MARIADB_ROOT_PASS=$(grep -E "^MYSQL_ROOT_PASSWORD=" "$STACK_ROOT/.env" 2>/dev/null | cut -d= -f2 || echo "root_secret")
+    mkdir -p "$INSTANCE_DIR"
+    if [ ! -f "$INSTANCE_DIR/wp-login.php" ]; then
+        log_info "Descargando WordPress Core para [$INSTANCE_NAME]..."
+        curl -sSL https://wordpress.org/latest.tar.gz | tar -xz -C "$INSTANCE_DIR" --strip-components=1
+        log_ok "WordPress descargado en $INSTANCE_DIR."
+    fi
 
-docker exec mariadb mariadb -u root -p"$MARIADB_ROOT_PASS" --skip-ssl -e "
-CREATE DATABASE IF NOT EXISTS \`${DB_NAME}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-CREATE USER IF NOT EXISTS '${DB_USER}'@'%' IDENTIFIED BY '${DB_PASS}';
-GRANT ALL PRIVILEGES ON \`${DB_NAME}\`.* TO '${DB_USER}'@'%';
-FLUSH PRIVILEGES;" 2>/dev/null || true
-log_ok "Base de Datos '${DB_NAME}' y usuario '${DB_USER}' creados."
+    # MariaDB
+    local DB_NAME="wp_${SITE_SLUG}_${DB_SUFFIX}"
+    local DB_USER="wp_${SITE_SLUG}_user"
+    local DB_PASS=$(openssl rand -base64 18 | tr -dc 'a-zA-Z0-9' | head -c 16)
+    local MARIADB_ROOT_PASS=$(grep -E "^MYSQL_ROOT_PASSWORD=" "$STACK_ROOT/.env" 2>/dev/null | cut -d= -f2 || echo "root_secret")
 
-# 7. Generar wp-config.php Blindado (Con 1024M, no-concatenate, no-cron)
-if [ ! -f "$SITE_WEB_DIR/wp-config.php" ]; then
-    SALT_KEYS=$(curl -s https://api.wordpress.org/secret-key/1.1/salt/ || true)
-    cat << WPCONF > "$SITE_WEB_DIR/wp-config.php"
+    docker exec mariadb mariadb -u root -p"$MARIADB_ROOT_PASS" --skip-ssl -e "
+    CREATE DATABASE IF NOT EXISTS \`${DB_NAME}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+    CREATE USER IF NOT EXISTS '${DB_USER}'@'%' IDENTIFIED BY '${DB_PASS}';
+    GRANT ALL PRIVILEGES ON \`${DB_NAME}\`.* TO '${DB_USER}'@'%';
+    FLUSH PRIVILEGES;" 2>/dev/null || true
+    log_ok "Base de Datos '${DB_NAME}' creada para [$INSTANCE_NAME]."
+
+    # wp-config.php
+    if [ ! -f "$INSTANCE_DIR/wp-config.php" ]; then
+        local SALT_KEYS=$(curl -s https://api.wordpress.org/secret-key/1.1/salt/ || true)
+        cat << WPCONF > "$INSTANCE_DIR/wp-config.php"
 <?php
 define( 'DB_NAME', '${DB_NAME}' );
 define( 'DB_USER', '${DB_USER}' );
@@ -163,35 +197,61 @@ define( 'WP_MAX_MEMORY_LIMIT', '1024M' );
 define( 'CONCATENATE_SCRIPTS', false );
 define( 'DISABLE_WP_CRON', true );
 
-// Redis Cache
+// Redis Cache Scoped
 define( 'WP_CACHE', true );
 define( 'WP_REDIS_HOST', 'redis' );
 define( 'WP_REDIS_PORT', 6379 );
-define( 'WP_REDIS_PREFIX', '${SITE_SLUG}_' );
+define( 'WP_REDIS_PREFIX', '${REDIS_SUBPREFIX}' );
 
 if ( ! defined( 'ABSPATH' ) ) {
     define( 'ABSPATH', __DIR__ . '/' );
 }
 require_once ABSPATH . 'wp-settings.php';
 WPCONF
-    chmod 600 "$SITE_WEB_DIR/wp-config.php"
-    log_ok "wp-config.php optimizado generado."
+        chmod 600 "$INSTANCE_DIR/wp-config.php"
+        log_ok "wp-config.php optimizado generado para [$INSTANCE_NAME]."
+    fi
+
+    # Registrar datos de salida
+    SUMMARY_DATA+=("Instancia: [$INSTANCE_NAME] -> URL: https://${DOMAIN}${5} | BD: ${DB_NAME} | User: ${DB_USER} | Pass: ${DB_PASS}")
+}
+
+SUMMARY_DATA=()
+SITE_WEB_DIR="$STACK_ROOT/wp-data/$SITE_SLUG"
+
+# 5. Instalar WordPress Home (Raíz)
+log_step "Configurando WordPress Principal (Home)..."
+setup_wp_instance "$SITE_WEB_DIR" "Home / Principal" "db" "${SITE_SLUG}_" ""
+
+# 6. Instalar Subcarpetas de Idiomas si aplica
+if [ ${#SUB_LANGS[@]} -gt 0 ]; then
+    for lang in "${SUB_LANGS[@]}"; do
+        log_step "Configurando instancia independiente para idioma [/$lang/]..."
+        setup_wp_instance "$SITE_WEB_DIR/$lang" "Idioma /$lang/" "${lang}_db" "${SITE_SLUG}_${lang}_" "/$lang/"
+    done
 fi
 
-# Permisos 33:33 (www-data)
+# 7. Permisos de Archivos 33:33 (www-data)
 sudo chown -R 33:33 "$SITE_WEB_DIR" 2>/dev/null || chown -R 33:33 "$SITE_WEB_DIR" 2>/dev/null || true
 find "$SITE_WEB_DIR" -type d -exec chmod 755 {} + 2>/dev/null || true
 find "$SITE_WEB_DIR" -type f -exec chmod 644 {} + 2>/dev/null || true
-[ -f "$SITE_WEB_DIR/wp-config.php" ] && chmod 600 "$SITE_WEB_DIR/wp-config.php"
+find "$SITE_WEB_DIR" -type f -name "wp-config.php" -exec chmod 600 {} + 2>/dev/null || true
 
 # 8. Recargar NGINX y Reiniciar PHP
 docker exec wp-nginx nginx -s reload 2>/dev/null || true
 docker restart "$PHP_CONTAINER" >/dev/null 2>&1 || true
 
-echo -e "\n${C_BOLD}${C_GREEN}✔ SITIO APROVISIONADO EXITOSAMENTE${C_RESET}"
-echo -e "  - Dominio       : https://${DOMAIN}"
-echo -e "  - Carpeta Web   : ${SITE_WEB_DIR}"
-echo -e "  - Base de Datos : ${DB_NAME}"
-echo -e "  - Usuario BD    : ${DB_USER}"
-echo -e "  - Contraseña BD : ${DB_PASS}"
-echo -e "  - Motor PHP     : ${PHP_CONTAINER} (Puerto TCP ${PHP_PORT})"
+# 9. Resumen Final
+echo -e "\n${C_BOLD}${C_GREEN}======================================================================${C_RESET}"
+echo -e "${C_BOLD}${C_GREEN}         ¡SITIO APROVISIONADO EXITOSAMENTE CON SE2CODE!               ${C_RESET}"
+echo -e "${C_GREEN}======================================================================${C_RESET}\n"
+echo -e "  - Dominio Maestro : https://${DOMAIN}"
+echo -e "  - Directorio Web  : ${SITE_WEB_DIR}"
+echo -e "  - Motor PHP       : ${PHP_CONTAINER} (Puerto TCP ${PHP_PORT})"
+echo -e "  - Arquitectura    : $([ ${#SUB_LANGS[@]} -gt 0 ] && echo "Multilenguaje / Multi-Directorio (${SUB_LANGS[*]})" || echo "Estándar")\n"
+
+echo -e "${C_BOLD}${C_CYAN}Detalles de Acceso a Bases de Datos:${C_RESET}"
+for item in "${SUMMARY_DATA[@]}"; do
+    echo -e "  » ${item}"
+done
+echo ""

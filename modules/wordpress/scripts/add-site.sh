@@ -140,11 +140,20 @@ if [ ${#SUB_LANGS[@]} -gt 0 ]; then
     for lang in "${SUB_LANGS[@]}"; do
         SUB_RULES="${SUB_RULES}\n    # Enrutamiento Sub-WordPress: /${lang}/\n    location /${lang}/ {\n        try_files \$uri \$uri/ /${lang}/index.php?\$args;\n    }\n"
     done
-    # Insertar antes de 'location / {'
     sed -i "s|location / {|${SUB_RULES}\n    location / {|" "$VHOST_FILE"
     log_ok "Reglas de enrutamiento NGINX añadidas para: ${SUB_LANGS[*]}"
 fi
 log_ok "Virtual Host NGINX activo en $VHOST_FILE"
+
+# Credenciales maestras únicas de usuario para MariaDB
+DB_USER="wp_${SITE_SLUG}_user"
+DB_PASS=$(openssl rand -base64 18 | tr -dc 'a-zA-Z0-9' | head -c 16)
+MARIADB_ROOT_PASS=$(grep -E "^MYSQL_ROOT_PASSWORD=" "$STACK_ROOT/.env" 2>/dev/null | cut -d= -f2 || echo "root_secret")
+
+# Crear el usuario en MariaDB una sola vez
+docker exec mariadb mariadb -u root -p"$MARIADB_ROOT_PASS" --skip-ssl -e "
+CREATE USER IF NOT EXISTS '${DB_USER}'@'%' IDENTIFIED BY '${DB_PASS}';
+FLUSH PRIVILEGES;" 2>/dev/null || true
 
 # Función auxiliar para crear y configurar una instancia de WordPress
 setup_wp_instance() {
@@ -152,6 +161,7 @@ setup_wp_instance() {
     local INSTANCE_NAME="$2"
     local DB_SUFFIX="$3"
     local REDIS_SUBPREFIX="$4"
+    local URL_PATH="$5"
 
     mkdir -p "$INSTANCE_DIR"
     if [ ! -f "$INSTANCE_DIR/wp-login.php" ]; then
@@ -160,18 +170,13 @@ setup_wp_instance() {
         log_ok "WordPress descargado en $INSTANCE_DIR."
     fi
 
-    # MariaDB
+    # MariaDB Database dedicada para esta instancia
     local DB_NAME="wp_${SITE_SLUG}_${DB_SUFFIX}"
-    local DB_USER="wp_${SITE_SLUG}_user"
-    local DB_PASS=$(openssl rand -base64 18 | tr -dc 'a-zA-Z0-9' | head -c 16)
-    local MARIADB_ROOT_PASS=$(grep -E "^MYSQL_ROOT_PASSWORD=" "$STACK_ROOT/.env" 2>/dev/null | cut -d= -f2 || echo "root_secret")
-
     docker exec mariadb mariadb -u root -p"$MARIADB_ROOT_PASS" --skip-ssl -e "
     CREATE DATABASE IF NOT EXISTS \`${DB_NAME}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-    CREATE USER IF NOT EXISTS '${DB_USER}'@'%' IDENTIFIED BY '${DB_PASS}';
     GRANT ALL PRIVILEGES ON \`${DB_NAME}\`.* TO '${DB_USER}'@'%';
     FLUSH PRIVILEGES;" 2>/dev/null || true
-    log_ok "Base de Datos '${DB_NAME}' creada para [$INSTANCE_NAME]."
+    log_ok "Base de Datos '${DB_NAME}' creada y asignada a '${DB_USER}'."
 
     # wp-config.php
     if [ ! -f "$INSTANCE_DIR/wp-config.php" ]; then
@@ -213,7 +218,7 @@ WPCONF
     fi
 
     # Registrar datos de salida
-    SUMMARY_DATA+=("Instancia: [$INSTANCE_NAME] -> URL: https://${DOMAIN}${5} | BD: ${DB_NAME} | User: ${DB_USER} | Pass: ${DB_PASS}")
+    SUMMARY_DATA+=("Instancia: [$INSTANCE_NAME] -> URL: https://${DOMAIN}${URL_PATH} | BD: ${DB_NAME}")
 }
 
 SUMMARY_DATA=()
@@ -248,9 +253,11 @@ echo -e "${C_GREEN}=============================================================
 echo -e "  - Dominio Maestro : https://${DOMAIN}"
 echo -e "  - Directorio Web  : ${SITE_WEB_DIR}"
 echo -e "  - Motor PHP       : ${PHP_CONTAINER} (Puerto TCP ${PHP_PORT})"
+echo -e "  - Usuario BD      : ${DB_USER}"
+echo -e "  - Contraseña BD   : ${DB_PASS}"
 echo -e "  - Arquitectura    : $([ ${#SUB_LANGS[@]} -gt 0 ] && echo "Multilenguaje / Multi-Directorio (${SUB_LANGS[*]})" || echo "Estándar")\n"
 
-echo -e "${C_BOLD}${C_CYAN}Detalles de Acceso a Bases de Datos:${C_RESET}"
+echo -e "${C_BOLD}${C_CYAN}Instancias y Bases de Datos Creadas:${C_RESET}"
 for item in "${SUMMARY_DATA[@]}"; do
     echo -e "  » ${item}"
 done

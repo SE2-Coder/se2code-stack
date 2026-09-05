@@ -72,18 +72,23 @@ if [ ! -f "$TARGET_DIR/wp-login.php" ]; then
     log_ok "WordPress descargado en $TARGET_DIR."
 fi
 
-# Base de datos independiente
+# Reutilizar credenciales del sitio maestro si existen para asegurar autenticación en MariaDB
+if [ -f "$SITE_WEB_DIR/wp-config.php" ]; then
+    DB_USER=$(grep -E "define\(\s*'DB_USER'" "$SITE_WEB_DIR/wp-config.php" | awk -F"'" '{print $4}')
+    DB_PASS=$(grep -E "define\(\s*'DB_PASSWORD'" "$SITE_WEB_DIR/wp-config.php" | awk -F"'" '{print $4}')
+else
+    DB_USER="wp_${SITE_SLUG}_user"
+    DB_PASS=$(openssl rand -base64 18 | tr -dc 'a-zA-Z0-9' | head -c 16)
+fi
+
 DB_NAME="wp_${SITE_SLUG}_${SUB_NAME}_db"
-DB_USER="wp_${SITE_SLUG}_user"
-DB_PASS=$(openssl rand -base64 18 | tr -dc 'a-zA-Z0-9' | head -c 16)
 MARIADB_ROOT_PASS=$(grep -E "^MYSQL_ROOT_PASSWORD=" "$STACK_ROOT/.env" 2>/dev/null | cut -d= -f2 || echo "root_secret")
 
 docker exec mariadb mariadb -u root -p"$MARIADB_ROOT_PASS" --skip-ssl -e "
 CREATE DATABASE IF NOT EXISTS \`${DB_NAME}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-CREATE USER IF NOT EXISTS '${DB_USER}'@'%' IDENTIFIED BY '${DB_PASS}';
 GRANT ALL PRIVILEGES ON \`${DB_NAME}\`.* TO '${DB_USER}'@'%';
 FLUSH PRIVILEGES;" 2>/dev/null || true
-log_ok "Base de Datos '${DB_NAME}' creada en MariaDB."
+log_ok "Base de Datos '${DB_NAME}' creada y asignada a '${DB_USER}'."
 
 # wp-config.php
 if [ ! -f "$TARGET_DIR/wp-config.php" ]; then
@@ -143,4 +148,4 @@ echo -e "  - URL Acceso    : ${C_CYAN}https://${DOMAIN}/${SUB_NAME}/${C_RESET}"
 echo -e "  - Carpeta Web   : ${TARGET_DIR}"
 echo -e "  - Base de Datos : ${C_GREEN}${DB_NAME}${C_RESET}"
 echo -e "  - Usuario BD    : ${DB_USER}"
-echo -e "  - Contraseña BD : ${DB_PASS}\n"
+echo -e "  - Contraseña BD : (Misma contraseña de la raíz)\n"

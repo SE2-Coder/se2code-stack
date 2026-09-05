@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # ==============================================================================
 # se2Code Stack Server - WordPress: Aprovisionador de Sitios (Estándar o Multilenguaje)
+# Arquitectura 100% Aislada (Zero-Trust): Base de datos y usuario propios por instancia
 # ==============================================================================
 set -euo pipefail
 
@@ -145,17 +146,9 @@ if [ ${#SUB_LANGS[@]} -gt 0 ]; then
 fi
 log_ok "Virtual Host NGINX activo en $VHOST_FILE"
 
-# Credenciales maestras únicas de usuario para MariaDB
-DB_USER="wp_${SITE_SLUG}_user"
-DB_PASS=$(openssl rand -base64 18 | tr -dc 'a-zA-Z0-9' | head -c 16)
 MARIADB_ROOT_PASS=$(grep -E "^MYSQL_ROOT_PASSWORD=" "$STACK_ROOT/.env" 2>/dev/null | cut -d= -f2 || echo "root_secret")
 
-# Crear el usuario en MariaDB una sola vez
-docker exec mariadb mariadb -u root -p"$MARIADB_ROOT_PASS" --skip-ssl -e "
-CREATE USER IF NOT EXISTS '${DB_USER}'@'%' IDENTIFIED BY '${DB_PASS}';
-FLUSH PRIVILEGES;" 2>/dev/null || true
-
-# Función auxiliar para crear y configurar una instancia de WordPress
+# Función auxiliar para crear y configurar una instancia de WordPress con usuario 100% aislado
 setup_wp_instance() {
     local INSTANCE_DIR="$1"
     local INSTANCE_NAME="$2"
@@ -170,13 +163,17 @@ setup_wp_instance() {
         log_ok "WordPress descargado en $INSTANCE_DIR."
     fi
 
-    # MariaDB Database dedicada para esta instancia
+    # Base de datos y usuario dedicados e independientes (Zero Trust)
     local DB_NAME="wp_${SITE_SLUG}_${DB_SUFFIX}"
+    local DB_USER="wp_${SITE_SLUG}_${DB_SUFFIX}_user"
+    local DB_PASS=$(openssl rand -base64 18 | tr -dc 'a-zA-Z0-9' | head -c 16)
+
     docker exec mariadb mariadb -u root -p"$MARIADB_ROOT_PASS" --skip-ssl -e "
     CREATE DATABASE IF NOT EXISTS \`${DB_NAME}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+    CREATE USER IF NOT EXISTS '${DB_USER}'@'%' IDENTIFIED BY '${DB_PASS}';
     GRANT ALL PRIVILEGES ON \`${DB_NAME}\`.* TO '${DB_USER}'@'%';
     FLUSH PRIVILEGES;" 2>/dev/null || true
-    log_ok "Base de Datos '${DB_NAME}' creada y asignada a '${DB_USER}'."
+    log_ok "Base de Datos '${DB_NAME}' y usuario aislado '${DB_USER}' creados."
 
     # wp-config.php
     if [ ! -f "$INSTANCE_DIR/wp-config.php" ]; then
@@ -214,11 +211,11 @@ if ( ! defined( 'ABSPATH' ) ) {
 require_once ABSPATH . 'wp-settings.php';
 WPCONF
         chmod 600 "$INSTANCE_DIR/wp-config.php"
-        log_ok "wp-config.php optimizado generado para [$INSTANCE_NAME]."
+        log_ok "wp-config.php generado con credenciales aisladas para [$INSTANCE_NAME]."
     fi
 
     # Registrar datos de salida
-    SUMMARY_DATA+=("Instancia: [$INSTANCE_NAME] -> URL: https://${DOMAIN}${URL_PATH} | BD: ${DB_NAME}")
+    SUMMARY_DATA+=("Instancia: [$INSTANCE_NAME] -> URL: https://${DOMAIN}${URL_PATH} | BD: ${DB_NAME} | User: ${DB_USER} | Pass: ${DB_PASS}")
 }
 
 SUMMARY_DATA=()
@@ -253,11 +250,9 @@ echo -e "${C_GREEN}=============================================================
 echo -e "  - Dominio Maestro : https://${DOMAIN}"
 echo -e "  - Directorio Web  : ${SITE_WEB_DIR}"
 echo -e "  - Motor PHP       : ${PHP_CONTAINER} (Puerto TCP ${PHP_PORT})"
-echo -e "  - Usuario BD      : ${DB_USER}"
-echo -e "  - Contraseña BD   : ${DB_PASS}"
 echo -e "  - Arquitectura    : $([ ${#SUB_LANGS[@]} -gt 0 ] && echo "Multilenguaje / Multi-Directorio (${SUB_LANGS[*]})" || echo "Estándar")\n"
 
-echo -e "${C_BOLD}${C_CYAN}Instancias y Bases de Datos Creadas:${C_RESET}"
+echo -e "${C_BOLD}${C_CYAN}Instancias y Bases de Datos Aisladas (Zero-Trust):${C_RESET}"
 for item in "${SUMMARY_DATA[@]}"; do
     echo -e "  » ${item}"
 done

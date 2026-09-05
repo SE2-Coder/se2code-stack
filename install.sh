@@ -29,6 +29,7 @@ clear 2>/dev/null || true
 echo -e "${C_CYAN}"
 echo "   ======================================================================="
 echo "                  ⚡ se2Code Stack Server - Auto-Installer                "
+echo -e "           ${C_BOLD}${C_CYAN}🌐 Web:${C_RESET} ${C_YELLOW}https://se2code.com${C_RESET}  ${C_BOLD}|${C_RESET}  ${C_BOLD}${C_PURPLE}🛠️ Toolkit:${C_RESET} ${C_GREEN}https://se2code.engineer${C_RESET}    "
 echo "   ======================================================================="
 echo -e "${C_RESET}"
 

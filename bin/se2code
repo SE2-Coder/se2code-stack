@@ -93,7 +93,7 @@ while true; do
                 ;;
             7)
                 echo -e "\n${C_BOLD}--- Actualización de Certificados SSL ---${C_RESET}"
-                read -r -p "Escribe el dominio exacto (ej: skincarebeautyholic.com): " DOM
+                read -r -p "Escribe el dominio exacto (ej: misitio.com): " DOM
                 CERTS_DIR="$STACK_ROOT/modules/wordpress/nginx/certs/$DOM"
                 mkdir -p "$CERTS_DIR"
                 
@@ -208,7 +208,7 @@ while true; do
                 ;;
             7)
                 echo -e "\n${C_BOLD}--- Actualización de Certificados SSL ---${C_RESET}"
-                read -r -p "Escribe el dominio exacto (ej: skincarebeautyholic.com): " DOM
+                read -r -p "Escribe el dominio exacto (ej: misitio.com): " DOM
                 CERTS_DIR="$STACK_ROOT/modules/wordpress/nginx/certs/$DOM"
                 mkdir -p "$CERTS_DIR"
                 

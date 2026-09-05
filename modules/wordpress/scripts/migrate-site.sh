@@ -17,7 +17,7 @@ echo -e "${C_CYAN}==============================================================
 
 # 1. Solicitar Dominio Destino
 while true; do
-    read -r -p "Ingresa el dominio a configurar en este servidor (ej: dev.mister.loans o midominio.com): " DOMAIN
+    read -r -p "Ingresa el dominio a configurar en este servidor (ej: misitio.com o staging.misitio.com): " DOMAIN
     DOMAIN=$(echo "$DOMAIN" | tr '[:upper:]' '[:lower:]' | xargs)
     if [[ "$DOMAIN" =~ ^[a-zA-Z0-9][-a-zA-Z0-9.]*\.[a-zA-Z]{2,}$ ]]; then
         break

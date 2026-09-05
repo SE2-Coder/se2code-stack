@@ -19,11 +19,11 @@ PHP_VERSION="${3:-}"
 # Modo interactivo
 if [ -z "$SITE_SLUG" ]; then
     echo -e "${C_BOLD}${C_CYAN}--- Aprovisionamiento de Sitio WordPress ---${C_RESET}"
-    read -r -p "Identificador / Slug del sitio (ej: misterloans): " SITE_SLUG
+    read -r -p "Identificador / Slug del sitio (ej: misitio): " SITE_SLUG
 fi
 
 if [ -z "$DOMAIN" ]; then
-    read -r -p "Dominio principal (ej: dev.mister.loans): " DOMAIN
+    read -r -p "Dominio principal (ej: misitio.com): " DOMAIN
 fi
 
 if [ -z "$PHP_VERSION" ]; then

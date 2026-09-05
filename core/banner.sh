@@ -28,6 +28,7 @@ show_banner() {
 BANNER_EOF
     echo -e "${C_BOLD}${C_BLUE}           S E R V E R   D E V O P S   S T A C K${C_RESET}"
     echo -e "${C_GRAY}        Plataforma Modular de Alta Disponibilidad y Rendimiento${C_RESET}"
+    echo -e "   ${C_BOLD}${C_CYAN}🌐 Soluciones:${C_RESET} ${C_YELLOW}https://se2code.com${C_RESET}  ${C_DIM}|${C_RESET}  ${C_BOLD}${C_PURPLE}🛠️  Toolkit:${C_RESET} ${C_GREEN}https://se2code.engineer${C_RESET}"
     echo -e "${C_CYAN}================================================================${C_RESET}"
 }
 

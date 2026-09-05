@@ -68,7 +68,7 @@ do_single_backup() {
     if [ "$TYPE" = "full" ] || [ "$TYPE" = "db" ]; then
         MARIADB_ROOT_PASS=$(grep -E "^MYSQL_ROOT_PASSWORD=" "$STACK_ROOT/.env" 2>/dev/null | cut -d= -f2 || echo "root_secret")
         
-        # Buscar todas las bases de datos del sitio (ej: wp_misterloans_db, wp_misterloans_es_db, etc.)
+        # Buscar todas las bases de datos del sitio (ej: wp_misitio_db, wp_misitio_es_db, etc.)
         MATCHED_DBS=$(docker exec mariadb mariadb -u root -p"$MARIADB_ROOT_PASS" --skip-ssl -e "SHOW DATABASES LIKE 'wp\_${SLUG}\_%';" 2>/dev/null | grep -E "^wp_${SLUG}_" || true)
         
         if [ -z "$MATCHED_DBS" ]; then

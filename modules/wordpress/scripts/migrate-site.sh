@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # ==============================================================================
 # se2Code Stack Server - Asistente Automatizado de Migración WordPress
-# Importación limpia de archivos (.tar.gz) + Base de Datos (.sql / .sql.gz)
+# Importación limpia de archivos (.tar.gz / .tar / .zip) + BD (.sql / .sql.gz)
 # ==============================================================================
 set -euo pipefail
 
@@ -40,6 +40,7 @@ if [ -d "$SITE_WEB_DIR" ] || [ -f "$VHOST_FILE" ]; then
         exit 0
     fi
     rm -rf "$SITE_WEB_DIR" "$VHOST_FILE" 2>/dev/null || true
+    rm -f "$STACK_ROOT"/php/php*/pools/"${SITE_SLUG}".conf 2>/dev/null || true
 fi
 
 # 2. Rutas de los Archivos de Migración
@@ -68,8 +69,7 @@ while true; do
 done
 
 # 3. Selección de Motor PHP
-echo -e "
-${C_BOLD}--- Selección de Motor PHP ---${C_RESET}"
+echo -e "\n${C_BOLD}--- Selección de Motor PHP ---${C_RESET}"
 echo -e "  1) ${C_GREEN}PHP 8.4 (Estable - Recomendado para producción y compatibilidad con Elementor)${C_RESET}"
 echo -e "  2) ${C_YELLOW}PHP 8.5 (Preview de última generación)${C_RESET}"
 read -r -p "Selecciona versión [1-2, por defecto 1]: " PHP_CHOICE
@@ -94,43 +94,43 @@ log_ok "Motor asignado: $PHP_CONTAINER (Puerto TCP dinámico $PHP_PORT)"
 
 # 5. Generar Pool PHP-FPM con la plantilla oficial
 mkdir -p "$POOL_DIR"
-sed -e "s/{{SITE_SLUG}}/$SITE_SLUG/g"     -e "s/{{PHP_PORT}}/$PHP_PORT/g"     "$STACK_ROOT/templates/php-pool.conf.tpl" > "$POOL_DIR/${SITE_SLUG}.conf"
+sed -e "s/{{SITE_SLUG}}/$SITE_SLUG/g" \
+    -e "s/{{PHP_PORT}}/$PHP_PORT/g" \
+    "$STACK_ROOT/templates/php-pool.conf.tpl" > "$POOL_DIR/${SITE_SLUG}.conf"
 log_ok "Pool PHP-FPM generado en $POOL_DIR/${SITE_SLUG}.conf"
 
 # 6. Certificados SSL (Cloudflare Origin o Autofirmado Temporal)
 CERTS_DIR="$STACK_ROOT/nginx/certs/$DOMAIN"
 mkdir -p "$CERTS_DIR"
 
-echo -e "
-${C_BOLD}--- Certificados SSL (Cloudflare Origin Certificate) ---${C_RESET}"
+echo -e "\n${C_BOLD}--- Certificados SSL (Cloudflare Origin Certificate) ---${C_RESET}"
 read -r -p "¿Deseas pegar ahora los certificados de Cloudflare? [S/n]: " HAS_SSL
 HAS_SSL=${HAS_SSL:-S}
 
 if [[ "$HAS_SSL" =~ ^[Ss]$ ]]; then
-    echo -e "
-${C_CYAN}Pega el Certificado de Origen (Origin Certificate) y escribe 'EOF' en una línea nueva:${C_RESET}"
+    echo -e "\n${C_CYAN}Pega el Certificado de Origen (Origin Certificate) y escribe 'EOF' en una línea nueva:${C_RESET}"
     SSL_CERT=""
     while IFS= read -r line; do
         [ "$line" = "EOF" ] && break
-        SSL_CERT="${SSL_CERT}${line}
-"
+        SSL_CERT="${SSL_CERT}${line}\n"
     done
     printf "%b" "$SSL_CERT" > "$CERTS_DIR/fullchain.pem"
 
-    echo -e "
-${C_CYAN}Pega la Llave Privada (Private Key) y escribe 'EOF' en una línea nueva:${C_RESET}"
+    echo -e "\n${C_CYAN}Pega la Llave Privada (Private Key) y escribe 'EOF' en una línea nueva:${C_RESET}"
     SSL_KEY=""
     while IFS= read -r line; do
         [ "$line" = "EOF" ] && break
-        SSL_KEY="${SSL_KEY}${line}
-"
+        SSL_KEY="${SSL_KEY}${line}\n"
     done
     printf "%b" "$SSL_KEY" > "$CERTS_DIR/privkey.pem"
     cp "$CERTS_DIR/fullchain.pem" "$CERTS_DIR/chain.pem"
     log_ok "Certificados SSL de Cloudflare instalados."
 else
     log_warn "Generando certificados autofirmados temporales..."
-    openssl req -x509 -nodes -days 365 -newkey rsa:2048         -keyout "$CERTS_DIR/privkey.pem"         -out "$CERTS_DIR/fullchain.pem"         -subj "/C=CO/ST=Valle/L=Cali/O=se2Code/CN=$DOMAIN" >/dev/null 2>&1
+    openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
+        -keyout "$CERTS_DIR/privkey.pem" \
+        -out "$CERTS_DIR/fullchain.pem" \
+        -subj "/C=CO/ST=Valle/L=Cali/O=se2Code/CN=$DOMAIN" >/dev/null 2>&1
     cp "$CERTS_DIR/fullchain.pem" "$CERTS_DIR/chain.pem"
     log_warn "Certificados autofirmados temporales listos. Podrás actualizarlos luego con 'se2code -> Opción 7'."
 fi
@@ -141,7 +141,11 @@ chmod 644 "$CERTS_DIR"/*.pem
 # 7. Configurar Virtual Host NGINX con la plantilla oficial
 VHOST_FILE="$STACK_ROOT/nginx/conf.d/${SITE_SLUG}.conf"
 mkdir -p "$STACK_ROOT/nginx/conf.d"
-sed -e "s/{{SITE_SLUG}}/$SITE_SLUG/g"     -e "s/{{DOMAIN}}/$DOMAIN/g"     -e "s/{{PHP_CONTAINER}}/$PHP_CONTAINER/g"     -e "s/{{PHP_PORT}}/$PHP_PORT/g"     "$STACK_ROOT/templates/nginx-vhost.conf.tpl" > "$VHOST_FILE"
+sed -e "s/{{SITE_SLUG}}/$SITE_SLUG/g" \
+    -e "s/{{DOMAIN}}/$DOMAIN/g" \
+    -e "s/{{PHP_CONTAINER}}/$PHP_CONTAINER/g" \
+    -e "s/{{PHP_PORT}}/$PHP_PORT/g" \
+    "$STACK_ROOT/templates/nginx-vhost.conf.tpl" > "$VHOST_FILE"
 log_ok "Virtual Host NGINX configurado en $VHOST_FILE"
 
 # 8. Crear Base de Datos y Usuario Aislado en MariaDB
@@ -160,81 +164,102 @@ GRANT ALL PRIVILEGES ON \`${DB_NAME}\`.* TO '${DB_USER}'@'%';
 FLUSH PRIVILEGES;" 2>/dev/null || true
 log_ok "Base de Datos '${DB_NAME}' y usuario '${DB_USER}' listos para recibir los datos."
 
-# 9. Descomprimir Archivos Directamente en wp-data
+# 9. Descomprimir Archivos y Normalizar Raíz Web
 log_section "DESCOMPRIMIENDO ARCHIVOS DE WORDPRESS"
 mkdir -p "$SITE_WEB_DIR"
 
 log_step "Extrayendo $TAR_FILE en $SITE_WEB_DIR..."
-# Detectar si los archivos vienen envueltos en una subcarpeta (ej: public_html/ o wordpress/)
-SAMPLE_PATH=$(tar -tf "$TAR_FILE" 2>/dev/null | head -n 10 | grep -E "wp-config\.php|wp-login\.php" || true)
-
-if [ -n "$SAMPLE_PATH" ] && [[ "$SAMPLE_PATH" =~ / ]]; then
-    TOP_DIR=$(echo "$SAMPLE_PATH" | cut -d/ -f1)
-    log_info "Los archivos están anidados en la carpeta '$TOP_DIR'. Extrayendo con --strip-components=1..."
-    tar -xzf "$TAR_FILE" -C "$SITE_WEB_DIR" --strip-components=1 2>/dev/null || tar -xf "$TAR_FILE" -C "$SITE_WEB_DIR" --strip-components=1
+if [[ "$TAR_FILE" =~ \.zip$ ]]; then
+    unzip -q -o "$TAR_FILE" -d "$SITE_WEB_DIR"
+elif [[ "$TAR_FILE" =~ \.tar\.gz$|\.tgz$ ]]; then
+    tar -xzf "$TAR_FILE" -C "$SITE_WEB_DIR"
+elif [[ "$TAR_FILE" =~ \.tar$ ]]; then
+    tar -xf "$TAR_FILE" -C "$SITE_WEB_DIR"
 else
-    log_info "Extrayendo archivos directamente en la raíz..."
-    tar -xzf "$TAR_FILE" -C "$SITE_WEB_DIR" 2>/dev/null || tar -xf "$TAR_FILE" -C "$SITE_WEB_DIR"
+    tar -xf "$TAR_FILE" -C "$SITE_WEB_DIR" 2>/dev/null || unzip -q -o "$TAR_FILE" -d "$SITE_WEB_DIR"
 fi
-log_ok "Archivos de WordPress extraídos exitosamente."
 
-# 10. Importar Base de Datos (.sql)
+# Detectar si WordPress quedó atrapado en un subdirectorio (ej: public_html/, wordpress/, etc.)
+WP_ROOT_FILE=$(find "$SITE_WEB_DIR" -maxdepth 4 -type f -name "wp-login.php" 2>/dev/null | head -n 1 || true)
+if [ -n "$WP_ROOT_FILE" ]; then
+    WP_REAL_DIR=$(dirname "$WP_ROOT_FILE")
+    if [ "$WP_REAL_DIR" != "$SITE_WEB_DIR" ]; then
+        log_info "WordPress detectado dentro de subcarpeta: '$WP_REAL_DIR'"
+        log_step "Moviendo archivos a la raíz web ($SITE_WEB_DIR)..."
+        (
+            shopt -s dotglob nullglob
+            mv "$WP_REAL_DIR"/* "$SITE_WEB_DIR"/ 2>/dev/null || true
+        )
+        rmdir -p "$WP_REAL_DIR" 2>/dev/null || true
+    fi
+fi
+log_ok "Archivos de WordPress ubicados correctamente en la raíz web."
+
+# 10. Importar Base de Datos (.sql) Sanitizada
 log_section "IMPORTANDO BASE DE DATOS (.SQL)"
 log_step "Importando dump en la base de datos '${DB_NAME}'..."
 if [[ "$SQL_FILE" =~ \.gz$ ]]; then
-    zcat "$SQL_FILE" | docker exec -i mariadb mariadb -u root -p"$MARIADB_ROOT_PASS" --skip-ssl "$DB_NAME" || true
+    zcat "$SQL_FILE" | sed -E '/^(CREATE DATABASE|USE[[:space:]]+)/Id' | docker exec -i mariadb mariadb -u root -p"$MARIADB_ROOT_PASS" --skip-ssl "$DB_NAME"
 else
-    docker exec -i mariadb mariadb -u root -p"$MARIADB_ROOT_PASS" --skip-ssl "$DB_NAME" < "$SQL_FILE" || true
+    sed -E '/^(CREATE DATABASE|USE[[:space:]]+)/Id' "$SQL_FILE" | docker exec -i mariadb mariadb -u root -p"$MARIADB_ROOT_PASS" --skip-ssl "$DB_NAME"
 fi
 log_ok "Base de Datos importada con éxito."
 
-# 11. Conectar y Reconfigurar wp-config.php Inteligente
-log_section "CONECTANDO Y RECONFIGURANDO WP-CONFIG.PHP"
+# 11. Conectar y Generar wp-config.php Estandarizado
+log_section "CONECTANDO Y GENERANDO WP-CONFIG.PHP MAESTRO"
 
 WP_CONFIG="$SITE_WEB_DIR/wp-config.php"
 
-# Detectar prefijo de tablas real (desde MariaDB o wp-config)
+# Detectar prefijo de tablas real (desde MariaDB o wp-config original)
 TABLE_PREFIX="wp_"
-DB_DETECTED_PREFIX=$(docker exec mariadb mariadb -u root -p"$MARIADB_ROOT_PASS" --skip-ssl -e "SELECT table_name FROM information_schema.tables WHERE table_schema = '${DB_NAME}' AND table_name LIKE '%options' LIMIT 1;" 2>/dev/null | tail -n 1 | sed 's/options$//' || true)
+DB_DETECTED_PREFIX=$(docker exec mariadb mariadb -u root -p"$MARIADB_ROOT_PASS" --skip-ssl -N -s -e "SELECT table_name FROM information_schema.tables WHERE table_schema = '${DB_NAME}' AND table_name LIKE '%posts' AND table_name NOT LIKE '%postmeta' LIMIT 1;" 2>/dev/null | sed 's/posts$//' | tr -d '[:space:]' || true)
+
+if [ -z "$DB_DETECTED_PREFIX" ]; then
+    DB_DETECTED_PREFIX=$(docker exec mariadb mariadb -u root -p"$MARIADB_ROOT_PASS" --skip-ssl -N -s -e "SELECT table_name FROM information_schema.tables WHERE table_schema = '${DB_NAME}' AND table_name LIKE '%options' LIMIT 1;" 2>/dev/null | sed 's/options$//' | tr -d '[:space:]' || true)
+fi
+
 if [ -n "$DB_DETECTED_PREFIX" ]; then
     TABLE_PREFIX="$DB_DETECTED_PREFIX"
 elif [ -f "$WP_CONFIG" ]; then
-    FILE_PREFIX=$(grep -E "^\s*\\$table_prefix\s*=" "$WP_CONFIG" | head -n 1 | cut -d"'" -f2 2>/dev/null || true)
+    FILE_PREFIX=$(grep -E "^\s*\\$table_prefix\s*=" "$WP_CONFIG" 2>/dev/null | head -n 1 | cut -d"'" -f2 | tr -d '[:space:]' || true)
     [ -n "$FILE_PREFIX" ] && TABLE_PREFIX="$FILE_PREFIX"
 fi
 log_info "Prefijo de tablas detectado: '$TABLE_PREFIX'"
+
+# Respaldar wp-config.php original si existe
 if [ -f "$WP_CONFIG" ]; then
-    sed -i "s/^[[:space:]]*\\\$table_prefix[[:space:]]*=.*/\\\$table_prefix = '${TABLE_PREFIX}';/" "$WP_CONFIG" 2>/dev/null || true
+    cp "$WP_CONFIG" "$WP_CONFIG.backup" 2>/dev/null || true
 fi
 
-# Reemplazar o insertar credenciales seguras de BD
-if [ -f "$WP_CONFIG" ]; then
-    sed -E -i "s/define\s*\(\s*['\"]DB_NAME['\"].*/define( 'DB_NAME', '${DB_NAME}' );/" "$WP_CONFIG"
-    sed -E -i "s/define\s*\(\s*['\"]DB_USER['\"].*/define( 'DB_USER', '${DB_USER}' );/" "$WP_CONFIG"
-    sed -E -i "s/define\s*\(\s*['\"]DB_PASSWORD['\"].*/define( 'DB_PASSWORD', '${DB_PASS}' );/" "$WP_CONFIG"
-    sed -E -i "s/define\s*\(\s*['\"]DB_HOST['\"].*/define( 'DB_HOST', 'mariadb:3306' );/" "$WP_CONFIG"
+# Generar Salts frescos y seguros
+SALT_KEYS=$(curl -sSL https://api.wordpress.org/secret-key/1.1/salt/ 2>/dev/null || true)
+if [ -z "$SALT_KEYS" ]; then
+    SALT_KEYS="// Salts generados automáticamente por se2Code
+define('AUTH_KEY',         '$(openssl rand -base64 32)');
+define('SECURE_AUTH_KEY',  '$(openssl rand -base64 32)');
+define('LOGGED_IN_KEY',    '$(openssl rand -base64 32)');
+define('NONCE_KEY',        '$(openssl rand -base64 32)');
+define('AUTH_SALT',        '$(openssl rand -base64 32)');
+define('SECURE_AUTH_SALT', '$(openssl rand -base64 32)');
+define('LOGGED_IN_SALT',   '$(openssl rand -base64 32)');
+define('NONCE_SALT',       '$(openssl rand -base64 32)');"
+fi
 
-    # Eliminar configuraciones de hosts o puertos anteriores
-    sed -i "/WP_REDIS_HOST/d" "$WP_CONFIG"
-    sed -i "/WP_REDIS_PORT/d" "$WP_CONFIG"
-    sed -i "/WP_REDIS_PREFIX/d" "$WP_CONFIG"
-    sed -i "/DISABLE_WP_CRON/d" "$WP_CONFIG"
-    sed -i "/WP_CACHE/d" "$WP_CONFIG"
-    sed -i "/WP_HOME/d" "$WP_CONFIG"
-    sed -i "/WP_SITEURL/d" "$WP_CONFIG"
+# Generar wp-config.php maestro impecable
+cat << WPCONF > "$WP_CONFIG"
+<?php
+/**
+ * Configuración maestra de WordPress generada por se2Code Stack
+ */
 
-    # Insertar optimizaciones se2Code antes de table_prefix
-    cat << CFG_SNIPPET > /tmp/se2code_snippet.txt
+define( 'DB_NAME', '${DB_NAME}' );
+define( 'DB_USER', '${DB_USER}' );
+define( 'DB_PASSWORD', '${DB_PASS}' );
+define( 'DB_HOST', 'mariadb:3306' );
+define( 'DB_CHARSET', 'utf8mb4' );
+define( 'DB_COLLATE', '' );
 
-// Optimizaciones Maestras se2Code Stack (Auto-Inyectadas)
-define( 'WP_HOME', 'https://${DOMAIN}' );
-define( 'WP_SITEURL', 'https://${DOMAIN}' );
-define( 'FORCE_SSL_ADMIN', true );
-define( 'DISALLOW_FILE_EDIT', true );
-define( 'WP_MEMORY_LIMIT', '1024M' );
-define( 'WP_MAX_MEMORY_LIMIT', '1024M' );
-define( 'CONCATENATE_SCRIPTS', true );
-define( 'DISABLE_WP_CRON', true );
+${SALT_KEYS}
 
 // Detección de Proxy Reverso y Cloudflare HTTPS
 if ( isset( \$_SERVER['HTTP_X_FORWARDED_PROTO'] ) && 'https' === \$_SERVER['HTTP_X_FORWARDED_PROTO'] ) {
@@ -244,27 +269,60 @@ if ( isset( \$_SERVER['HTTP_CF_VISITOR'] ) && false !== strpos( \$_SERVER['HTTP_
     \$_SERVER['HTTPS'] = 'on';
 }
 
-// Redis Object Cache
+\$table_prefix = '${TABLE_PREFIX}';
+
+// Optimizaciones Maestras se2Code Stack (Previene redirecciones al viejo dominio)
+define( 'WP_HOME', 'https://${DOMAIN}' );
+define( 'WP_SITEURL', 'https://${DOMAIN}' );
+define( 'FORCE_SSL_ADMIN', true );
+define( 'DISALLOW_FILE_EDIT', true );
+define( 'WP_MEMORY_LIMIT', '1024M' );
+define( 'WP_MAX_MEMORY_LIMIT', '1024M' );
+define( 'CONCATENATE_SCRIPTS', true );
+define( 'DISABLE_WP_CRON', true );
+
+// Redis Object Cache Scoped
 define( 'WP_CACHE', true );
 define( 'WP_REDIS_HOST', 'redis' );
 define( 'WP_REDIS_PORT', 6379 );
 define( 'WP_REDIS_PREFIX', '${SITE_SLUG}_' );
 define( 'WP_REDIS_TIMEOUT', 1 );
 define( 'WP_REDIS_READ_TIMEOUT', 1 );
-CFG_SNIPPET
 
-    sed -i "/\\\$table_prefix/r /tmp/se2code_snippet.txt" "$WP_CONFIG"
-    rm -f /tmp/se2code_snippet.txt
-    log_ok "wp-config.php reconectado a MariaDB y configurado con Redis."
+if ( ! defined( 'ABSPATH' ) ) {
+    define( 'ABSPATH', __DIR__ . '/' );
+}
+require_once ABSPATH . 'wp-settings.php';
+WPCONF
+
+log_ok "wp-config.php generado limpiamente y conectado a MariaDB (prefijo '${TABLE_PREFIX}')."
+
+# 12. Purgar Drop-ins Incompatibles y Desplegar Acelerador se2Code
+log_section "LIMPIEZA DE DROP-INS Y PROTECCIÓN PREVENTIVA"
+rm -f "$SITE_WEB_DIR/wp-content/advanced-cache.php"
+rm -f "$SITE_WEB_DIR/wp-content/wp-cache-config.php"
+rm -f "$SITE_WEB_DIR/wp-content/db.php"
+rm -rf "$SITE_WEB_DIR/wp-content/cache" 2>/dev/null || true
+
+# Configurar object-cache.php de Redis si el plugin existe
+if [ -f "$SITE_WEB_DIR/wp-content/plugins/redis-cache/includes/object-cache.php" ]; then
+    cp "$SITE_WEB_DIR/wp-content/plugins/redis-cache/includes/object-cache.php" "$SITE_WEB_DIR/wp-content/object-cache.php" 2>/dev/null || true
+else
+    rm -f "$SITE_WEB_DIR/wp-content/object-cache.php"
 fi
 
-# 12. Permisos del Sistema de Archivos y Activación de Servicios
+mkdir -p "$SITE_WEB_DIR/wp-content/mu-plugins"
+cp "$STACK_ROOT/templates/se2code-core.php.tpl" "$SITE_WEB_DIR/wp-content/mu-plugins/se2code-core.php" 2>/dev/null || true
+chmod 644 "$SITE_WEB_DIR/wp-content/mu-plugins/se2code-core.php" 2>/dev/null || true
+log_ok "Drop-ins antiguos purgados y se2code-core.php desplegado en mu-plugins."
+
+# 13. Permisos del Sistema de Archivos y Activación de Servicios
 log_section "AJUSTANDO PERMISOS Y ACTIVANDO SERVICIOS"
 log_step "Asignando propiedad de archivos a www-data (33:33)..."
 chown -R 33:33 "$SITE_WEB_DIR" 2>/dev/null || true
 find "$SITE_WEB_DIR" -type d -exec chmod 755 {} + 2>/dev/null || true
 find "$SITE_WEB_DIR" -type f -exec chmod 644 {} + 2>/dev/null || true
-[ -f "$WP_CONFIG" ] && chmod 600 "$WP_CONFIG" 2>/dev/null || true
+chmod 600 "$WP_CONFIG" 2>/dev/null || true
 
 log_step "Recargando NGINX y reiniciando $PHP_CONTAINER..."
 docker exec "$PHP_CONTAINER" chown -R www-data:www-data /var/log/php 2>/dev/null || true
@@ -272,7 +330,7 @@ docker restart "$PHP_CONTAINER" >/dev/null 2>&1 || true
 docker exec wp-nginx nginx -t >/dev/null 2>&1 && docker exec wp-nginx nginx -s reload 2>/dev/null || docker restart wp-nginx >/dev/null 2>&1 || true
 log_ok "NGINX recargado y motor PHP activado con el nuevo pool."
 
-# 13. Cambio de Dominio / Staging (wp search-replace)
+# 14. Cambio de Dominio / Staging (wp search-replace)
 log_section "CAMBIO DE DOMINIO / STAGING (SEARCH & REPLACE)"
 
 echo -e "¿Deseas ejecutar un reemplazo de URL en la base de datos (${C_YELLOW}wp search-replace${C_RESET})?"
@@ -281,8 +339,8 @@ read -r -p "¿Ejecutar reemplazo de dominio? [S/n]: " DO_REPLACE
 DO_REPLACE=${DO_REPLACE:-S}
 
 if [[ "$DO_REPLACE" =~ ^[Ss]$ ]]; then
-    # Intentar detectar el dominio previo desde wp_options
-    OLD_SITEURL=$(docker exec mariadb mariadb -u root -p"$MARIADB_ROOT_PASS" --skip-ssl -e "SELECT option_value FROM \`${DB_NAME}\`.${TABLE_PREFIX}options WHERE option_name = 'siteurl' LIMIT 1;" 2>/dev/null | tail -n 1 || true)
+    # Detectar el dominio previo directamente desde wp_options con MariaDB en modo silencioso
+    OLD_SITEURL=$(docker exec mariadb mariadb -u root -p"$MARIADB_ROOT_PASS" --skip-ssl -N -s -e "SELECT option_value FROM \`${DB_NAME}\`.${TABLE_PREFIX}options WHERE option_name IN ('siteurl', 'home') AND option_value != '' LIMIT 1;" 2>/dev/null | tr -d '[:space:]' || true)
     
     echo -e "\nDominio previo detectado en la BD: ${C_YELLOW}${OLD_SITEURL:-'No detectado'}${C_RESET}"
     read -r -p "Escribe la URL vieja a buscar [ej: ${OLD_SITEURL:-https://viejo-dominio.com}]: " SEARCH_URL
@@ -295,6 +353,7 @@ if [[ "$DO_REPLACE" =~ ^[Ss]$ ]]; then
     if [ -n "$SEARCH_URL" ] && [ -n "$REPLACE_URL" ] && [ "$SEARCH_URL" != "$REPLACE_URL" ]; then
         log_step "Ejecutando: wp search-replace '$SEARCH_URL' '$REPLACE_URL' --all-tables --precise..."
         docker exec --user 33:33 "$PHP_CONTAINER" wp search-replace "$SEARCH_URL" "$REPLACE_URL" --all-tables --precise --skip-columns=guid --path="$CONTAINER_PATH" || true
+
         # Reemplazar versión sin https si aplica
         SEARCH_HTTP=$(echo "$SEARCH_URL" | sed 's|^https://|http://|')
         REPLACE_HTTP=$(echo "$REPLACE_URL" | sed 's|^https://|https://|')
@@ -312,7 +371,7 @@ if [[ "$DO_REPLACE" =~ ^[Ss]$ ]]; then
     fi
 fi
 
-# 14. Paso Final: Optimización y Limpieza de Caché
+# 15. Paso Final: Optimización y Limpieza de Caché
 log_section "PASO FINAL: OPTIMIZACIÓN Y LIMPIEZA DE CACHÉ"
 bash "$SCRIPT_DIR/optimize-site.sh" "$SITE_SLUG"
 

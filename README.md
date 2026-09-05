@@ -3,6 +3,11 @@
 > **Suite Profesional de Infraestructura y Despliegue Automatizado**  
 > Diseñada para máxima velocidad, alta concurrencia en WordPress y seguridad empresarial.
 
+[![Engineering Hub](https://img.shields.io/badge/Engineering_Hub-se2code.engineer-00d2ff?style=for-the-badge&logo=codeforces&logoColor=white)](https://se2code.engineer)
+[![Agency Services](https://img.shields.io/badge/Commercial_Services-se2code.com-7928CA?style=for-the-badge&logo=googlecloud&logoColor=white)](https://se2code.com)
+[![Docker](https://img.shields.io/badge/Docker_29+-2496ED?style=for-the-badge&logo=docker&logoColor=white)](https://www.docker.com/)
+[![License](https://img.shields.io/badge/License-MIT-success?style=for-the-badge)](LICENSE)
+
 ---
 
 ## 🚀 Instalación en 1 Solo Comando (Estilo CyberPanel / Coolify)
@@ -124,6 +129,21 @@ Como tus sitios y bases de datos están totalmente desacoplados de Git, un `git 
 
 ---
 
+## 🌐 El Ecosistema se2Code
+
+Este proyecto forma parte del ecosistema integral de infraestructura y desarrollo de **se2Code**, dividido en dos portales complementarios:
+
+| Portal | Enfoque Principal | ¿Qué encontrarás aquí? |
+| :--- | :--- | :--- |
+| 🛠️ **[se2code.engineer](https://se2code.engineer)** | **Laboratorio Técnico & Navaja Suiza DevOps** | Documentación técnica profunda de estos scripts, tutoriales de administración de servidores, guías de solución de errores (*troubleshooting*), y herramientas interactivas en vivo (generador de contraseñas de alta entropía, calculadoras de recursos, asistentes de configuración VPN WireGuard y más). |
+| 💼 **[se2code.com](https://se2code.com)** | **Servicios Comerciales & Consultoría Cloud** | Nuestra agencia de ingeniería de software: desarrollo web de alto rendimiento, arquitectura cloud personalizada, soporte para e-commerce de alto tráfico, migraciones de infraestructura crítica y acuerdos de nivel de servicio (SLA) para empresas. |
+
+---
+
 ## 📜 Licencia & Créditos
 
-Desarrollado con dedicación por **se2Code**. Diseñado para el alto rendimiento y la tranquilidad operativa.
+Desarrollado con dedicación por el equipo de **se2Code**.  
+- 🛠️ Artículos técnicos y herramientas: [se2code.engineer](https://se2code.engineer)  
+- 💼 Servicios de ingeniería y desarrollo: [se2code.com](https://se2code.com)  
+
+Diseñado para el alto rendimiento, la soberanía de datos y la tranquilidad operativa.

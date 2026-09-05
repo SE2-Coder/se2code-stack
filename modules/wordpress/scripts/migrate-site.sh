@@ -68,7 +68,8 @@ while true; do
 done
 
 # 3. Selección de Motor PHP
-echo -e "\n${C_BOLD}--- Selección de Motor PHP ---${C_RESET}"
+echo -e "
+${C_BOLD}--- Selección de Motor PHP ---${C_RESET}"
 echo -e "  1) ${C_GREEN}PHP 8.4 (Estable - Recomendado para producción y compatibilidad con Elementor)${C_RESET}"
 echo -e "  2) ${C_YELLOW}PHP 8.5 (Preview de última generación)${C_RESET}"
 read -r -p "Selecciona versión [1-2, por defecto 1]: " PHP_CHOICE
@@ -76,166 +77,74 @@ PHP_CHOICE=${PHP_CHOICE:-1}
 
 if [ "$PHP_CHOICE" = "2" ]; then
     PHP_CONTAINER="wp-php85"
-    PHP_PORT="9002"
-    PHP_POOLS_DIR="$STACK_ROOT/php/pools-85"
+    POOL_DIR="$STACK_ROOT/php/php85/pools"
 else
     PHP_CONTAINER="wp-php84"
-    PHP_PORT="9001"
-    PHP_POOLS_DIR="$STACK_ROOT/php/pools-84"
+    POOL_DIR="$STACK_ROOT/php/php84/pools"
 fi
-log_ok "Motor asignado: $PHP_CONTAINER (Puerto TCP $PHP_PORT)"
 
-# 4. Certificados SSL de Cloudflare
+# 4. Asignar puerto TCP dinámico (previene colisiones de puertos)
+USED_PORTS=$(grep -shoE "listen = 0.0.0.0:[0-9]+" "$STACK_ROOT"/php/php*/pools/*.conf 2>/dev/null | awk -F: '{print $2}' || true)
+NEXT_PORT=9001
+while echo "$USED_PORTS" | grep -q "^${NEXT_PORT}$"; do
+    NEXT_PORT=$((NEXT_PORT + 1))
+done
+PHP_PORT=$NEXT_PORT
+log_ok "Motor asignado: $PHP_CONTAINER (Puerto TCP dinámico $PHP_PORT)"
+
+# 5. Generar Pool PHP-FPM con la plantilla oficial
+mkdir -p "$POOL_DIR"
+sed -e "s/{{SITE_SLUG}}/$SITE_SLUG/g"     -e "s/{{PHP_PORT}}/$PHP_PORT/g"     "$STACK_ROOT/templates/php-pool.conf.tpl" > "$POOL_DIR/${SITE_SLUG}.conf"
+log_ok "Pool PHP-FPM generado en $POOL_DIR/${SITE_SLUG}.conf"
+
+# 6. Certificados SSL (Cloudflare Origin o Autofirmado Temporal)
 CERTS_DIR="$STACK_ROOT/nginx/certs/$DOMAIN"
 mkdir -p "$CERTS_DIR"
 
-echo -e "\n${C_BOLD}--- Certificados SSL (Cloudflare Origin Certificate) ---${C_RESET}"
+echo -e "
+${C_BOLD}--- Certificados SSL (Cloudflare Origin Certificate) ---${C_RESET}"
 read -r -p "¿Deseas pegar ahora los certificados de Cloudflare? [S/n]: " HAS_SSL
 HAS_SSL=${HAS_SSL:-S}
 
 if [[ "$HAS_SSL" =~ ^[Ss]$ ]]; then
-    echo -e "\n${C_CYAN}Pega el Certificado de Origen (Origin Certificate) y escribe 'EOF' en una línea nueva:${C_RESET}"
+    echo -e "
+${C_CYAN}Pega el Certificado de Origen (Origin Certificate) y escribe 'EOF' en una línea nueva:${C_RESET}"
     SSL_CERT=""
     while IFS= read -r line; do
         [ "$line" = "EOF" ] && break
-        SSL_CERT="${SSL_CERT}${line}\n"
+        SSL_CERT="${SSL_CERT}${line}
+"
     done
     printf "%b" "$SSL_CERT" > "$CERTS_DIR/fullchain.pem"
 
-    echo -e "\n${C_CYAN}Pega la Llave Privada (Private Key) y escribe 'EOF' en una línea nueva:${C_RESET}"
+    echo -e "
+${C_CYAN}Pega la Llave Privada (Private Key) y escribe 'EOF' en una línea nueva:${C_RESET}"
     SSL_KEY=""
     while IFS= read -r line; do
         [ "$line" = "EOF" ] && break
-        SSL_KEY="${SSL_KEY}${line}\n"
+        SSL_KEY="${SSL_KEY}${line}
+"
     done
     printf "%b" "$SSL_KEY" > "$CERTS_DIR/privkey.pem"
     cp "$CERTS_DIR/fullchain.pem" "$CERTS_DIR/chain.pem"
-    chmod 600 "$CERTS_DIR/privkey.pem"
-    chmod 644 "$CERTS_DIR"/*.pem
-    log_ok "Certificados SSL instalados."
+    log_ok "Certificados SSL de Cloudflare instalados."
 else
-    log_warn "Generando certificado autofirmado temporal..."
-    openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
-        -keyout "$CERTS_DIR/privkey.pem" \
-        -out "$CERTS_DIR/fullchain.pem" \
-        -subj "/CN=$DOMAIN" >/dev/null 2>&1
+    log_warn "Generando certificados autofirmados temporales..."
+    openssl req -x509 -nodes -days 365 -newkey rsa:2048         -keyout "$CERTS_DIR/privkey.pem"         -out "$CERTS_DIR/fullchain.pem"         -subj "/C=CO/ST=Valle/L=Cali/O=se2Code/CN=$DOMAIN" >/dev/null 2>&1
     cp "$CERTS_DIR/fullchain.pem" "$CERTS_DIR/chain.pem"
-    chmod 600 "$CERTS_DIR/privkey.pem"
-    chmod 644 "$CERTS_DIR"/*.pem
-    log_ok "Certificado temporal listo. Podrás actualizarlo luego con 'se2code -> Opción 7'."
+    log_warn "Certificados autofirmados temporales listos. Podrás actualizarlos luego con 'se2code -> Opción 7'."
 fi
 
-# 5. Configurar PHP-FPM Pool Aislado
-mkdir -p "$PHP_POOLS_DIR"
-POOL_FILE="$PHP_POOLS_DIR/${SITE_SLUG}.conf"
-cat << POOL_EOF > "$POOL_FILE"
-[${SITE_SLUG}]
-user = www-data
-group = www-data
-listen = ${PHP_PORT}
-listen.owner = www-data
-listen.group = www-data
-listen.mode = 0660
+chmod 600 "$CERTS_DIR/privkey.pem"
+chmod 644 "$CERTS_DIR"/*.pem
 
-pm = ondemand
-pm.max_children = 20
-pm.process_idle_timeout = 10s
-pm.max_requests = 1000
-
-php_admin_value[memory_limit] = 1024M
-php_admin_value[upload_max_filesize] = 256M
-php_admin_value[post_max_size] = 256M
-php_admin_value[max_execution_time] = 300
-php_admin_value[max_input_time] = 300
-php_admin_value[sendmail_path] = /bin/true
-php_admin_value[opcache.enable] = 1
-php_admin_value[opcache.jit] = 1255
-
-catch_workers_output = yes
-php_admin_value[error_log] = /var/log/php/${SITE_SLUG}.error.log
-php_admin_flag[log_errors] = on
-access.log = /var/log/php/${SITE_SLUG}.access.log
-POOL_EOF
-log_ok "Pool PHP-FPM aislado configurado en $POOL_FILE."
-
-# 6. Configurar Virtual Host NGINX con FastCGI Microcache
+# 7. Configurar Virtual Host NGINX con la plantilla oficial
+VHOST_FILE="$STACK_ROOT/nginx/conf.d/${SITE_SLUG}.conf"
 mkdir -p "$STACK_ROOT/nginx/conf.d"
-cat << NGINX_EOF > "$VHOST_FILE"
-server {
-    listen 80;
-    listen [::]:80;
-    server_name ${DOMAIN} www.${DOMAIN};
-    return 301 https://\$host\$request_uri;
-}
+sed -e "s/{{SITE_SLUG}}/$SITE_SLUG/g"     -e "s/{{DOMAIN}}/$DOMAIN/g"     -e "s/{{PHP_CONTAINER}}/$PHP_CONTAINER/g"     -e "s/{{PHP_PORT}}/$PHP_PORT/g"     "$STACK_ROOT/templates/nginx-vhost.conf.tpl" > "$VHOST_FILE"
+log_ok "Virtual Host NGINX configurado en $VHOST_FILE"
 
-server {
-    listen 443 ssl;
-    listen [::]:443 ssl;
-    http2 on;
-    server_name ${DOMAIN} www.${DOMAIN};
-
-    ssl_certificate /etc/nginx/certs/${DOMAIN}/fullchain.pem;
-    ssl_certificate_key /etc/nginx/certs/${DOMAIN}/privkey.pem;
-
-    root /var/www/html/${SITE_SLUG};
-    index index.php index.html index.htm;
-
-    access_log /var/log/nginx/${SITE_SLUG}.access.log;
-    error_log /var/log/nginx/${SITE_SLUG}.error.log;
-
-    # Evitar cacheo de peticiones no GET/HEAD, query strings o logins/carritos
-    set \$skip_cache 0;
-    if (\$request_method = POST) { set \$skip_cache 1; }
-    if (\$query_string != "") { set \$skip_cache 1; }
-    if (\$request_uri ~* "/wp-admin/|/xmlrpc.php|wp-.*.php|/feed/|index.php|sitemap(_index)?.xml") { set \$skip_cache 1; }
-    if (\$http_cookie ~* "comment_author|wordpress_[a-f0-9]+|wp-postpass|wordpress_no_cache|wordpress_logged_in|woocommerce_items_in_cart") { set \$skip_cache 1; }
-
-    # Regla de purga Nginx Helper
-    location ~ /purge(/.*) {
-        fastcgi_cache_purge WORDPRESS "\$scheme\$request_method\$host\$1";
-    }
-
-    location / {
-        try_files \$uri \$uri/ /index.php?\$args;
-    }
-
-    location ~ \.php\$ {
-        try_files \$uri =404;
-        fastcgi_split_path_info ^(.+\.php)(/.+)\$;
-        fastcgi_pass ${PHP_CONTAINER}:${PHP_PORT};
-        fastcgi_index index.php;
-        include fastcgi_params;
-        fastcgi_param SCRIPT_FILENAME \$document_root\$fastcgi_script_name;
-        fastcgi_param PATH_INFO \$fastcgi_path_info;
-
-        fastcgi_cache WORDPRESS;
-        fastcgi_cache_bypass \$skip_cache;
-        fastcgi_no_cache \$skip_cache;
-        fastcgi_cache_valid 200 301 302 60m;
-        fastcgi_cache_use_stale error timeout updating invalid_header http_500 http_503;
-        fastcgi_cache_min_uses 1;
-        fastcgi_cache_lock on;
-        add_header X-FastCGI-Cache \$upstream_cache_status;
-        add_header X-Cache-Status \$upstream_cache_status;
-    }
-
-    location ~* \.(js|css|png|jpg|jpeg|gif|ico|svg|woff|woff2|ttf|eot)$ {
-        expires max;
-        log_not_found off;
-        access_log off;
-        add_header Cache-Control "public, max-age=31536000, immutable";
-    }
-
-    location ~ /\. {
-        deny all;
-        access_log off;
-        log_not_found off;
-    }
-}
-NGINX_EOF
-log_ok "Nginx Virtual Host con FastCGI Microcache configurado en $VHOST_FILE."
-
-# 7. Crear Base de Datos y Usuario Aislado en MariaDB
+# 8. Crear Base de Datos y Usuario Aislado en MariaDB
 log_section "CREANDO BASE DE DATOS Y USUARIO AISLADO"
 DB_NAME="wp_${SITE_SLUG}_db"
 DB_USER="wp_${SITE_SLUG}_user"
@@ -250,7 +159,7 @@ GRANT ALL PRIVILEGES ON \`${DB_NAME}\`.* TO '${DB_USER}'@'%';
 FLUSH PRIVILEGES;" 2>/dev/null || true
 log_ok "Base de Datos '${DB_NAME}' y usuario '${DB_USER}' listos para recibir los datos."
 
-# 8. Descomprimir Archivos Directamente en wp-data
+# 9. Descomprimir Archivos Directamente en wp-data
 log_section "DESCOMPRIMIENDO ARCHIVOS DE WORDPRESS"
 mkdir -p "$SITE_WEB_DIR"
 
@@ -268,7 +177,7 @@ else
 fi
 log_ok "Archivos de WordPress extraídos exitosamente."
 
-# 9. Importar Base de Datos
+# 10. Importar Base de Datos (.sql)
 log_section "IMPORTANDO BASE DE DATOS (.SQL)"
 log_step "Importando dump en la base de datos '${DB_NAME}'..."
 if [[ "$SQL_FILE" =~ \.gz$ ]]; then
@@ -278,7 +187,7 @@ else
 fi
 log_ok "Base de Datos importada con éxito."
 
-# 10. Reconfigurar wp-config.php Inteligente
+# 11. Conectar y Reconfigurar wp-config.php Inteligente
 log_section "CONECTANDO Y RECONFIGURANDO WP-CONFIG.PHP"
 
 WP_CONFIG="$SITE_WEB_DIR/wp-config.php"
@@ -338,7 +247,7 @@ CFG_SNIPPET
     log_ok "wp-config.php reconectado a MariaDB y configurado con Redis."
 fi
 
-# 11. Permisos del Sistema de Archivos y Activación de Servicios
+# 12. Permisos del Sistema de Archivos y Activación de Servicios
 log_section "AJUSTANDO PERMISOS Y ACTIVANDO SERVICIOS"
 log_step "Asignando propiedad de archivos a www-data (33:33)..."
 chown -R 33:33 "$SITE_WEB_DIR" 2>/dev/null || true
@@ -352,7 +261,7 @@ docker restart "$PHP_CONTAINER" >/dev/null 2>&1 || true
 docker exec wp-nginx nginx -t >/dev/null 2>&1 && docker exec wp-nginx nginx -s reload 2>/dev/null || docker restart wp-nginx >/dev/null 2>&1 || true
 log_ok "NGINX recargado y motor PHP activado con el nuevo pool."
 
-# 12. Opción wp search-replace para Staging o Cambio de Dominio
+# 13. Cambio de Dominio / Staging (wp search-replace)
 log_section "CAMBIO DE DOMINIO / STAGING (SEARCH & REPLACE)"
 
 echo -e "¿Deseas ejecutar un reemplazo de URL en la base de datos (${C_YELLOW}wp search-replace${C_RESET})?"
@@ -381,7 +290,7 @@ if [[ "$DO_REPLACE" =~ ^[Ss]$ ]]; then
     fi
 fi
 
-# 13. Optimización y Desactivación de Plugins de Caché
+# 14. Paso Final: Optimización y Limpieza de Caché
 log_section "PASO FINAL: OPTIMIZACIÓN Y LIMPIEZA DE CACHÉ"
 bash "$SCRIPT_DIR/optimize-site.sh" "$SITE_SLUG"
 

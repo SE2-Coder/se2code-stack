@@ -36,7 +36,7 @@ sudo ufw reload >/dev/null 2>&1 || true
 log_ok "Reglas NAT UFW activas en interfaz $MAIN_IF."
 
 # 3. Detectar IP Pública
-PUBLIC_IP=$(curl -s ifconfig.me || curl -s icanhazip.com || echo "127.0.0.1")
+PUBLIC_IP=$(curl -4 -s ifconfig.me || curl -4 -s icanhazip.com || curl -4 -s api.ipify.org || echo "127.0.0.1")
 log_ok "IP Pública del servidor: $PUBLIC_IP"
 
 # 4. Selección Dinámica de Puerto UDP

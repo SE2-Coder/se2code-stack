@@ -36,6 +36,7 @@ env[TEMP] = /tmp
 
 php_admin_value[error_log] = /var/log/php/{{SITE_SLUG}}-error.log
 php_admin_flag[log_errors] = on
+php_admin_value[sendmail_path] = /bin/true
 
 php_value[session.save_path] = /tmp
 php_value[soap.wsdl_cache_dir] = /tmp
@@ -46,7 +47,6 @@ php_value[max_execution_time] = 300
 php_value[max_input_time] = 300
 php_value[max_input_vars] = 10000
 php_value[default_socket_timeout] = 300
-php_value[mysql.connect_timeout] = 300
 php_value[upload_max_filesize] = 256M
 php_value[post_max_size] = 256M
 

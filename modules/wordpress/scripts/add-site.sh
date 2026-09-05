@@ -189,6 +189,14 @@ define( 'DB_COLLATE', 'utf8mb4_unicode_ci' );
 
 ${SALT_KEYS}
 
+// Detección de Proxy Reverso y Cloudflare HTTPS
+if ( isset( \$_SERVER['HTTP_X_FORWARDED_PROTO'] ) && 'https' === \$_SERVER['HTTP_X_FORWARDED_PROTO'] ) {
+    \$_SERVER['HTTPS'] = 'on';
+}
+if ( isset( \$_SERVER['HTTP_CF_VISITOR'] ) && false !== strpos( \$_SERVER['HTTP_CF_VISITOR'], 'https' ) ) {
+    \$_SERVER['HTTPS'] = 'on';
+}
+
 \$table_prefix = 'wp_';
 
 // Optimizaciones Maestras se2Code Stack
@@ -196,7 +204,7 @@ define( 'FORCE_SSL_ADMIN', true );
 define( 'DISALLOW_FILE_EDIT', true );
 define( 'WP_MEMORY_LIMIT', '1024M' );
 define( 'WP_MAX_MEMORY_LIMIT', '1024M' );
-define( 'CONCATENATE_SCRIPTS', false );
+define( 'CONCATENATE_SCRIPTS', true );
 define( 'DISABLE_WP_CRON', true );
 
 // Redis Cache Scoped
@@ -240,6 +248,7 @@ find "$SITE_WEB_DIR" -type f -exec chmod 644 {} + 2>/dev/null || true
 find "$SITE_WEB_DIR" -type f -name "wp-config.php" -exec chmod 600 {} + 2>/dev/null || true
 
 # 8. Recargar NGINX y Reiniciar PHP
+docker exec "$PHP_CONTAINER" chown -R www-data:www-data /var/log/php 2>/dev/null || true
 docker exec wp-nginx nginx -s reload 2>/dev/null || true
 docker restart "$PHP_CONTAINER" >/dev/null 2>&1 || true
 

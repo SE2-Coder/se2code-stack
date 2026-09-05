@@ -114,7 +114,7 @@ ENV_EOF
     log_step "Instalando comando global 'wp' (WP-CLI)..."
     cat << 'CLI_EOF' > /usr/local/bin/wp
 #!/usr/bin/env bash
-docker exec -i --user 33:33 se2code_php84 wp --allow-root "$@"
+docker exec -i --user 33:33 wp-php84 wp --allow-root "$@" 2>/dev/null || docker exec -i --user 33:33 wp-php85 wp --allow-root "$@"
 CLI_EOF
     chmod +x /usr/local/bin/wp
     log_ok "WP-CLI configurado globalmente en /usr/local/bin/wp"

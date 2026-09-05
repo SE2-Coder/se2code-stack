@@ -100,6 +100,14 @@ define( 'DB_COLLATE', 'utf8mb4_unicode_ci' );
 
 ${SALT_KEYS}
 
+// Detección de Proxy Reverso y Cloudflare HTTPS
+if ( isset( \$_SERVER['HTTP_X_FORWARDED_PROTO'] ) && 'https' === \$_SERVER['HTTP_X_FORWARDED_PROTO'] ) {
+    \$_SERVER['HTTPS'] = 'on';
+}
+if ( isset( \$_SERVER['HTTP_CF_VISITOR'] ) && false !== strpos( \$_SERVER['HTTP_CF_VISITOR'], 'https' ) ) {
+    \$_SERVER['HTTPS'] = 'on';
+}
+
 \$table_prefix = 'wp_';
 
 // Optimizaciones Maestras se2Code Stack
@@ -107,7 +115,7 @@ define( 'FORCE_SSL_ADMIN', true );
 define( 'DISALLOW_FILE_EDIT', true );
 define( 'WP_MEMORY_LIMIT', '1024M' );
 define( 'WP_MAX_MEMORY_LIMIT', '1024M' );
-define( 'CONCATENATE_SCRIPTS', false );
+define( 'CONCATENATE_SCRIPTS', true );
 define( 'DISABLE_WP_CRON', true );
 
 // Redis Cache con prefijo único por idioma

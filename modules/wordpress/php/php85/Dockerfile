@@ -11,6 +11,7 @@ RUN apk add --no-cache \
     libzip-dev \
     icu-dev \
     libxml2-dev \
+    imagemagick \
     imagemagick-dev \
     libtool \
     autoconf \
@@ -26,8 +27,17 @@ RUN apk add --no-cache \
 RUN docker-php-ext-configure gd --with-freetype --with-jpeg --with-webp
 RUN docker-php-ext-install -j$(nproc) ${PHP_EXTENSIONS}
 
-# Redis
-RUN pecl install redis && docker-php-ext-enable redis
+# Redis e Imagick
+RUN pecl download imagick && \
+    tar -xzf imagick-*.tgz && \
+    cd imagick-* && \
+    phpize && \
+    ./configure && \
+    make -j$(nproc) && \
+    make install && \
+    cd .. && rm -rf imagick-* && \
+    docker-php-ext-enable imagick && \
+    pecl install redis && docker-php-ext-enable redis
 
 # Alineación UID/GID 33 (www-data) en Alpine
 RUN deluser xfs 2>/dev/null || true && \

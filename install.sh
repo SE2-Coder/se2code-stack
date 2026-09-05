@@ -40,7 +40,21 @@ if [ "$EUID" -ne 0 ]; then
     exit 1
 fi
 
-# 2. Instalar dependencias mínimas para la descarga (git, curl, ca-certificates, tar)
+# 2. Comprobar compatibilidad de Sistema Operativo (Debian 12 / Debian 13)
+if [ -f /etc/os-release ]; then
+    . /etc/os-release
+    if [ "$ID" = "debian" ] && { [ "$VERSION_ID" = "12" ] || [ "$VERSION_ID" = "13" ]; }; then
+        echo -e "${C_GREEN}✔ Sistema Operativo verificado y certificado oficialmente: Debian ${VERSION_ID}${C_RESET}
+"
+    else
+        echo -e "${C_YELLOW}⚠ Aviso: Este stack ha sido probado y optimizado oficialmente ÚNICAMENTE en Debian 12 y Debian 13.${C_RESET}"
+        echo -e "${C_YELLOW}  Detectado: ${NAME:-$ID} ${VERSION_ID:-}. Continuando bajo tu propia discreción...${C_RESET}
+"
+        sleep 2
+    fi
+fi
+
+# 3. Instalar dependencias mínimas para la descarga (git, curl, ca-certificates, tar)
 echo -e "${C_CYAN}[1/3] Preparando dependencias básicas del sistema (git, curl, tar)...${C_RESET}"
 if command -v apt-get >/dev/null 2>&1; then
     export DEBIAN_FRONTEND=noninteractive

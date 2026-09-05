@@ -15,13 +15,17 @@ check_os_compatibility() {
         log_info "Detectado: $NAME ($VERSION)"
         case "$OS_ID" in
             debian)
-                log_ok "Sistema Operativo compatible (Debian $OS_VER)."
-                ;;
-            ubuntu)
-                log_ok "Sistema Operativo compatible (Ubuntu $OS_VER)."
+                if [ "$OS_VER" = "12" ] || [ "$OS_VER" = "13" ]; then
+                    log_ok "Sistema Operativo compatible y certificado oficialmente (Debian $OS_VER)."
+                else
+                    log_warn "Debian $OS_VER detectado. Este stack ha sido testeado y certificado oficialmente ÚNICAMENTE en Debian 12 y Debian 13."
+                    log_warn "Continuando bajo su propia discreción..."
+                fi
                 ;;
             *)
-                log_warn "Distribución no testeada oficialmente ($OS_ID). Intentando continuar..."
+                log_warn "Distribución no testeada oficialmente ($OS_ID / $NAME)."
+                log_warn "Este stack ha sido diseñado, probado y soportado oficialmente ÚNICAMENTE para Debian 12 y Debian 13."
+                log_warn "El uso en otras distribuciones es experimental. Intentando continuar..."
                 ;;
         esac
     else

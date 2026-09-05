@@ -12,7 +12,7 @@
 
 ## 🚀 Instalación en 1 Solo Comando (Estilo CyberPanel / Coolify)
 
-Para desplegar todo el stack en un servidor virgen (Ubuntu 22.04 / 24.04 o Debian 12), entra por SSH como `root` y pega este comando único:
+Para desplegar todo el stack en un servidor virgen (**Probado oficialmente en Debian 12 y Debian 13**), entra por SSH como `root` y pega este comando único:
 
 ```bash
 bash <(curl -sSL https://raw.githubusercontent.com/SE2-Coder/se2code-stack/main/install.sh)
@@ -85,20 +85,22 @@ Una vez instalado, tienes disponible en cualquier terminal el comando global:
 se2code
 ```
 
-### Opciones disponibles en el menú:
-* `[1] Crear nuevo sitio WordPress`: Pide dominio, usuario, genera BD y pega certificados SSL de Cloudflare.
-* `[2] Cambiar versión de PHP`: Alterna cualquier sitio entre PHP 8.4 y PHP 8.5 en 1 segundo sin caída de servicio.
-* `[3] Purgar FastCGI Cache`: Limpia la caché Nginx de un sitio específico o de todos.
-* `[4] Generar Backup Granular`:
-  * **Completo** (Base de datos + Archivos `wp-content`).
-  * **Solo Base de Datos** (`.sql.gz`).
-  * **Solo Archivos** (`.tar.gz` excluyendo cachés temporales).
-* `[5] Renovar / Cambiar Certificado SSL`: Pega un nuevo certificado de Cloudflare Origin CA sin reiniciar Nginx.
-* `[6] Eliminar un sitio WordPress`: Con confirmación de seguridad y respaldo preventivo automático.
-* `[7] Ver QR y Configuración WireGuard`: Muestra el código QR para escanear en la app móvil de WireGuard.
-* `[8] Reiniciar Servicios`: Reinicia el stack Nginx, PHP, MariaDB o Redis con un solo toque.
-* `[9] Diagnóstico de Hardware y Capacidad`: Muestra consumo en tiempo real de RAM, vCPU y sitios soportados.
-* `[10] Optimizar Memoria Swap`: Aumenta o recrea el archivo Swap del sistema.
+### Opciones disponibles en el menú `se2code`:
+* `[1] Listar todos los sitios WordPress instalados`: Resumen de dominios, rutas, puertos y versiones PHP activas.
+* `[2] Crear nuevo sitio WordPress`: Instalación limpia desde cero con descarga oficial del core de WordPress y SSL.
+* `[3] Migrar / Importar Sitio Existente`: Importación automatizada de paquetes `.tar.gz` + base de datos `.sql`/`.sql.gz`, auto-detección de `$table_prefix` y reemplazo de dominio (`search-replace`).
+* `[4] Agregar sub-sitio / idioma`: Configuración de directorios hijos (ej: `/es`, `/en`) con aislamiento.
+* `[5] Eliminar un sitio`: Con confirmación de seguridad y respaldo preventivo automático.
+* `[6] Cambiar versión de PHP`: Alterna cualquier sitio entre PHP 8.4 y PHP 8.5 en 1 segundo sin caída de servicio.
+* `[7] Actualizar / Pegar Certificados SSL`: Pega certificados de Cloudflare Origin CA sin reiniciar Nginx.
+* `[8] Respaldos Granulares`: Respaldos completos, solo base de datos (`.sql.gz`) o solo archivos (`.tar.gz`).
+* `[9] Purgar Cachés del Servidor`: Vacía la caché FastCGI de Nginx y la memoria de Redis al instante.
+* `[10] Optimizar Sitio Existente`: Auto-configuración de Redis Object Cache + Nginx Helper y detector de plugins de caché en conflicto.
+* `[11] Mostrar Código QR WireGuard`: Código QR para escanear en la app móvil de WireGuard.
+* `[12] Ver conexiones activas VPN`: Monitor de clientes conectados al túnel.
+* `[13] Detener WireGuard VPN`: Control del servicio VPN.
+* `[14] Diagnóstico de Hardware y Memoria`: Muestra consumo en tiempo real de RAM, vCPU y capacidad de sitios.
+* `[15] Activar / Ajustar Escudo de Memoria Swap`: Creación y afinamiento de memoria Swap de respaldo.
 
 ---
 

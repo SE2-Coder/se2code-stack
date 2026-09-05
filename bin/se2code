@@ -21,7 +21,7 @@ while true; do
     show_banner
     
     # Resumen de estado rápido
-    WP_SITES_COUNT=$(ls -1 "$STACK_ROOT"/modules/wordpress/php/php*/pools/*.conf 2>/dev/null | grep -vc "placeholder" || echo "0")
+    WP_SITES_COUNT=$(find "$STACK_ROOT/modules/wordpress/nginx/conf.d" -type f -name "*.conf" 2>/dev/null | wc -l | tr -d ' ')
     
     echo -e "  ${C_BOLD}ESTADO:${C_RESET} Sitios WordPress: ${C_GREEN}${WP_SITES_COUNT}${C_RESET} | NGINX: ${C_GREEN}Activo${C_RESET} | MariaDB: ${C_GREEN}Activa${C_RESET}"
     echo -e "${C_CYAN}================================================================${C_RESET}"

@@ -58,7 +58,7 @@ CONTAINER_PATH="/var/www/html/$SITE_SLUG"
 
 # Detectar versión PHP del sitio
 PHP_CONTAINER="wp-php84"
-if grep -q "fastcgi_pass.*9002" "$VHOST_FILE" 2>/dev/null; then
+if grep -q "fastcgi_pass.*wp-php85" "$VHOST_FILE" 2>/dev/null; then
     PHP_CONTAINER="wp-php85"
 fi
 
@@ -100,6 +100,15 @@ if [ "$DEACTIVATED_COUNT" -eq 0 ]; then
 else
     log_warn "Se desactivaron $DEACTIVATED_COUNT plugin(s) de caché de proveedores anteriores."
 fi
+
+# Eliminar drop-ins huérfanos del proveedor anterior que provocan Error 502 Bad Gateway
+for dropin in "advanced-cache.php" "wp-cache-config.php" "db.php"; do
+    if [ -f "$SITE_WEB_DIR/wp-content/$dropin" ]; then
+        log_warn "Eliminando drop-in huérfano en conflicto: wp-content/$dropin..."
+        rm -f "$SITE_WEB_DIR/wp-content/$dropin"
+    fi
+done
+rm -rf "$SITE_WEB_DIR/wp-content/cache" 2>/dev/null || true
 
 # 2. Configurar Constantes de wp-config.php
 log_section "PASO 2: AJUSTES DE ARQUITECTURA EN WP-CONFIG.PHP"
@@ -185,8 +194,9 @@ find "$SITE_WEB_DIR" -type f -exec chmod 644 {} + 2>/dev/null || true
 [ -f "$WP_CONFIG" ] && chmod 600 "$WP_CONFIG"
 log_ok "Permisos establecidos: directorios 755, archivos 644, wp-config 600 (usuario www-data)."
 
-# 7. Purga de Caché de Validación
+# 7. Purga de Caché de Validación y Reinicio de PHP
 docker exec wp-nginx rm -rf /var/cache/nginx/* 2>/dev/null || true
+docker restart "$PHP_CONTAINER" >/dev/null 2>&1 || true
 docker exec wp-nginx nginx -s reload 2>/dev/null || true
 
 # 8. Resumen Final

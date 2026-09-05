@@ -26,39 +26,44 @@ while true; do
     echo -e "  ${C_BOLD}ESTADO:${C_RESET} Sitios WordPress: ${C_GREEN}${WP_SITES_COUNT}${C_RESET} | NGINX: ${C_GREEN}Activo${C_RESET} | MariaDB: ${C_GREEN}Activa${C_RESET}"
     echo -e "${C_CYAN}================================================================${C_RESET}"
     echo -e "  ${C_BOLD}${C_CYAN}[ GESTIÓN DE WORDPRESS ]${C_RESET}"
-    echo -e "  1) ➕ Crear / Agregar un nuevo sitio WordPress"
-    echo -e "  2) 🗑️  Eliminar un sitio (con backup automático previo)"
-    echo -e "  3) 🔄 Cambiar versión de PHP de un sitio (8.4 ↔ 8.5)"
-    echo -e "  4) 🔑 Actualizar / Pegar Certificados SSL de Cloudflare"
-    echo -e "  5) 💾 Respaldos Granulares (Base de datos, Archivos o Full)"
-    echo -e "  6) ⚡ Purgar Cachés del Servidor (FastCGI Cache + Redis)"
+    echo -e "  1) 📋 Listar todos los sitios WordPress instalados"
+    echo -e "  2) ➕ Crear / Agregar un nuevo sitio WordPress"
+    echo -e "  3) 🗑️  Eliminar un sitio (con backup automático previo)"
+    echo -e "  4) 🔄 Cambiar versión de PHP de un sitio (8.4 ↔ 8.5)"
+    echo -e "  5) 🔑 Actualizar / Pegar Certificados SSL de Cloudflare"
+    echo -e "  6) 💾 Respaldos Granulares (Base de datos, Archivos o Full)"
+    echo -e "  7) ⚡ Purgar Cachés del Servidor (FastCGI Cache + Redis)"
     echo -e ""
     echo -e "  ${C_BOLD}${C_CYAN}[ GESTIÓN DE WIREGUARD VPN ]${C_RESET}"
-    echo -e "  7) 📱 Mostrar Código QR para Celular (Peer 1)"
-    echo -e "  8) 👥 Ver conexiones activas y estado del túnel"
+    echo -e "  8) 📱 Mostrar Código QR para Celular (Peer 1)"
+    echo -e "  9) 👥 Ver conexiones activas y estado del túnel"
     echo -e ""
     echo -e "  ${C_BOLD}${C_CYAN}[ SISTEMA Y RENDIMIENTO ]${C_RESET}"
-    echo -e "  9) 📊 Diagnóstico de Hardware y Memoria en vivo"
-    echo -e " 10) 🛡️  Activar / Ajustar Escudo de Memoria Swap"
-    echo -e " 11) ❌ Salir"
+    echo -e " 10) 📊 Diagnóstico de Hardware y Memoria en vivo"
+    echo -e " 11) 🛡️  Activar / Ajustar Escudo de Memoria Swap"
+    echo -e " 12) ❌ Salir"
     echo -e "${C_CYAN}================================================================${C_RESET}"
 
-    read -r -p "Selecciona una opción [1-11]: " MENU_CHOICE
+    read -r -p "Selecciona una opción [1-12]: " MENU_CHOICE
 
     case "$MENU_CHOICE" in
         1)
-            bash "$STACK_ROOT/modules/wordpress/scripts/add-site.sh"
+            bash "$STACK_ROOT/modules/wordpress/scripts/list-sites.sh"
             read -r -p "Presiona ENTER para volver al menú..." _
             ;;
         2)
-            bash "$STACK_ROOT/modules/wordpress/scripts/remove-site.sh"
+            bash "$STACK_ROOT/modules/wordpress/scripts/add-site.sh"
             read -r -p "Presiona ENTER para volver al menú..." _
             ;;
         3)
-            bash "$STACK_ROOT/modules/wordpress/scripts/switch-php.sh"
+            bash "$STACK_ROOT/modules/wordpress/scripts/remove-site.sh"
             read -r -p "Presiona ENTER para volver al menú..." _
             ;;
         4)
+            bash "$STACK_ROOT/modules/wordpress/scripts/switch-php.sh"
+            read -r -p "Presiona ENTER para volver al menú..." _
+            ;;
+        5)
             echo -e "\n${C_BOLD}--- Actualización de Certificados SSL ---${C_RESET}"
             read -r -p "Escribe el dominio exacto (ej: skincarebeautyholic.com): " DOM
             CERTS_DIR="$STACK_ROOT/modules/wordpress/nginx/certs/$DOM"
@@ -86,11 +91,11 @@ while true; do
             log_ok "Certificados actualizados y NGINX recargado."
             read -r -p "Presiona ENTER para volver al menú..." _
             ;;
-        5)
+        6)
             bash "$STACK_ROOT/modules/wordpress/scripts/backup-site.sh"
             read -r -p "Presiona ENTER para volver al menú..." _
             ;;
-        6)
+        7)
             log_step "Purgando Caché FastCGI y Redis..."
             sudo rm -rf /var/cache/nginx/* 2>/dev/null || true
             docker exec wp-nginx rm -rf /var/cache/nginx/* 2>/dev/null || true
@@ -99,7 +104,7 @@ while true; do
             log_ok "Caché de páginas FastCGI y memoria Redis vaciados por completo."
             read -r -p "Presiona ENTER para volver al menú..." _
             ;;
-        7)
+        8)
             if [ -f "$STACK_ROOT/modules/wireguard/config/peer1/peer1.conf" ]; then
                 echo -e "\n${C_BOLD}${C_GREEN}📱 Código QR de WireGuard (Peer 1 Móvil):${C_RESET}\n"
                 qrencode -t ansiutf8 < "$STACK_ROOT/modules/wireguard/config/peer1/peer1.conf"
@@ -108,20 +113,20 @@ while true; do
             fi
             read -r -p "Presiona ENTER para volver al menú..." _
             ;;
-        8)
+        9)
             echo -e "\n${C_BOLD}--- Conexiones Activas de WireGuard VPN ---${C_RESET}"
             docker exec wireguard wg show 2>/dev/null || log_warn "El contenedor de WireGuard no está corriendo."
             read -r -p "Presiona ENTER para volver al menú..." _
             ;;
-        9)
+        10)
             show_hardware_diagnostics
             read -r -p "Presiona ENTER para volver al menú..." _
             ;;
-        10)
+        11)
             create_swap_shield 2
             read -r -p "Presiona ENTER para volver al menú..." _
             ;;
-        11|q|Q)
+        12|q|Q)
             echo -e "\n${C_CYAN}¡Hasta pronto! Gracias por usar se2Code Stack.${C_RESET}\n"
             exit 0
             ;;

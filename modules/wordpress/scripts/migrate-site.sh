@@ -338,7 +338,21 @@ CFG_SNIPPET
     log_ok "wp-config.php reconectado a MariaDB y configurado con Redis."
 fi
 
-# 11. Opción wp search-replace para Staging o Cambio de Dominio
+# 11. Permisos del Sistema de Archivos y Activación de Servicios
+log_section "AJUSTANDO PERMISOS Y ACTIVANDO SERVICIOS"
+log_step "Asignando propiedad de archivos a www-data (33:33)..."
+chown -R 33:33 "$SITE_WEB_DIR" 2>/dev/null || true
+find "$SITE_WEB_DIR" -type d -exec chmod 755 {} + 2>/dev/null || true
+find "$SITE_WEB_DIR" -type f -exec chmod 644 {} + 2>/dev/null || true
+[ -f "$WP_CONFIG" ] && chmod 600 "$WP_CONFIG" 2>/dev/null || true
+
+log_step "Recargando NGINX y reiniciando $PHP_CONTAINER..."
+docker exec "$PHP_CONTAINER" chown -R www-data:www-data /var/log/php 2>/dev/null || true
+docker restart "$PHP_CONTAINER" >/dev/null 2>&1 || true
+docker exec wp-nginx nginx -t >/dev/null 2>&1 && docker exec wp-nginx nginx -s reload 2>/dev/null || docker restart wp-nginx >/dev/null 2>&1 || true
+log_ok "NGINX recargado y motor PHP activado con el nuevo pool."
+
+# 12. Opción wp search-replace para Staging o Cambio de Dominio
 log_section "CAMBIO DE DOMINIO / STAGING (SEARCH & REPLACE)"
 
 echo -e "¿Deseas ejecutar un reemplazo de URL en la base de datos (${C_YELLOW}wp search-replace${C_RESET})?"
@@ -367,9 +381,9 @@ if [[ "$DO_REPLACE" =~ ^[Ss]$ ]]; then
     fi
 fi
 
-# 12. Optimización y Desactivación de Plugins de Caché
+# 13. Optimización y Desactivación de Plugins de Caché
 log_section "PASO FINAL: OPTIMIZACIÓN Y LIMPIEZA DE CACHÉ"
-bash "$STACK_ROOT/modules/wordpress/scripts/optimize-site.sh" "$SITE_SLUG"
+bash "$SCRIPT_DIR/optimize-site.sh" "$SITE_SLUG"
 
 echo -e "\n${C_BOLD}${C_GREEN}======================================================================${C_RESET}"
 echo -e "${C_BOLD}${C_GREEN}       🎉 ¡MIGRACIÓN COMPLETADA EXITOSAMENTE CON SE2CODE!             ${C_RESET}"

@@ -119,6 +119,17 @@ CLI_EOF
     chmod +x /usr/local/bin/wp
     log_ok "WP-CLI configurado globalmente en /usr/local/bin/wp"
 
+    # Configure Automated WP-Cron Runner in System
+    log_step "Instalando ejecutor de WP-Cron en /etc/cron.d/se2code-wp-cron..."
+    chmod +x "${BASE_DIR}/bin/run-crons.sh"
+    cat << CRON_EOF > /etc/cron.d/se2code-wp-cron
+# /etc/cron.d/se2code-wp-cron: Ejecuta WP-Cron cada minuto para todos los sitios
+* * * * * root ${BASE_DIR}/bin/run-crons.sh >/dev/null 2>&1
+CRON_EOF
+    chmod 0644 /etc/cron.d/se2code-wp-cron
+    systemctl restart cron 2>/dev/null || /etc/init.d/cron restart 2>/dev/null || true
+    log_ok "WP-Cron programado exitosamente en el sistema."
+
     # Ask for initial sites
     echo -e "\n${C_BOLD}${C_CYAN}¿Deseas desplegar sitios WordPress en este momento?${C_RESET}"
     echo -e "  [0] = Solo dejar el stack base listo (podrás agregar sitios luego con 'se2code')"

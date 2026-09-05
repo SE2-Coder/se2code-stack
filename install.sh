@@ -11,9 +11,7 @@ set -e
 
 # Reasignar stdin a /dev/tty para que los menús interactivos y 'read' funcionen
 # perfectamente incluso cuando el usuario ejecuta 'curl ... | bash'
-if [ -t 0 ]; then
-    : # Ya es una terminal interactiva
-else
+if [ ! -t 0 ]; then
     if [ -e /dev/tty ]; then
         exec < /dev/tty
     fi
@@ -27,7 +25,7 @@ C_RED='\033[0;31m'
 C_BOLD='\033[1m'
 C_RESET='\033[0m'
 
-clear
+clear 2>/dev/null || true
 echo -e "${C_CYAN}"
 echo "   ======================================================================="
 echo "                  ⚡ se2Code Stack Server - Auto-Installer                "
@@ -41,13 +39,14 @@ if [ "$EUID" -ne 0 ]; then
     exit 1
 fi
 
-# 2. Instalar dependencias mínimas para la descarga (git, curl, ca-certificates)
-echo -e "${C_CYAN}[1/3] Preparando dependencias básicas del sistema...${C_RESET}"
+# 2. Instalar dependencias mínimas para la descarga (git, curl, ca-certificates, tar)
+echo -e "${C_CYAN}[1/3] Preparando dependencias básicas del sistema (git, curl, tar)...${C_RESET}"
 if command -v apt-get >/dev/null 2>&1; then
-    apt-get update -qq >/dev/null 2>&1
-    DEBIAN_FRONTEND=noninteractive apt-get install -y -qq git curl ca-certificates tar >/dev/null 2>&1
+    export DEBIAN_FRONTEND=noninteractive
+    apt-get update -y
+    apt-get install -y git curl ca-certificates tar
 elif command -v dnf >/dev/null 2>&1; then
-    dnf install -y -q git curl ca-certificates tar >/dev/null 2>&1
+    dnf install -y git curl ca-certificates tar
 fi
 
 # 3. Configuración del directorio de destino
@@ -55,13 +54,13 @@ INSTALL_DIR="/opt/se2code-stack"
 REPO_URL="https://github.com/SE2-Coder/se2code-stack.git"
 BRANCH="main"
 
-echo -e "${C_CYAN}[2/3] Descargando la suite de infraestructura en ${INSTALL_DIR}...${C_RESET}"
+echo -e "\n${C_CYAN}[2/3] Descargando la suite de infraestructura en ${INSTALL_DIR}...${C_RESET}"
 
 if [ -d "${INSTALL_DIR}/.git" ]; then
     echo -e "${C_YELLOW}» Se detectó una instalación previa. Actualizando repositorio...${C_RESET}"
     cd "$INSTALL_DIR"
-    git fetch origin "$BRANCH" >/dev/null 2>&1 || true
-    git reset --hard "origin/${BRANCH}" >/dev/null 2>&1 || true
+    git fetch origin "$BRANCH"
+    git reset --hard "origin/${BRANCH}"
 else
     mkdir -p /opt
     # Si la carpeta existe pero no es git, respaldarla
@@ -78,7 +77,7 @@ chmod +x "${INSTALL_DIR}/core/"*.sh
 chmod +x "${INSTALL_DIR}/modules/wordpress/scripts/"*.sh
 chmod +x "${INSTALL_DIR}/modules/wireguard/setup-vpn.sh"
 
-echo -e "${C_GREEN}[3/3] Paquete descargado con éxito.${C_RESET}"
+echo -e "\n${C_GREEN}[3/3] Paquete descargado y configurado con éxito.${C_RESET}"
 echo -e "${C_GREEN}» Iniciando asistente de despliegue interactivo...${C_RESET}\n"
 sleep 1
 

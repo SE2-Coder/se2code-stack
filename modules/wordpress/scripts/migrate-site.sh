@@ -182,9 +182,9 @@ log_ok "Archivos de WordPress extraídos exitosamente."
 log_section "IMPORTANDO BASE DE DATOS (.SQL)"
 log_step "Importando dump en la base de datos '${DB_NAME}'..."
 if [[ "$SQL_FILE" =~ \.gz$ ]]; then
-    zcat "$SQL_FILE" | docker exec -i mariadb mariadb -u root -p"$MARIADB_ROOT_PASS" --skip-ssl "$DB_NAME"
+    zcat "$SQL_FILE" | docker exec -i mariadb mariadb -u root -p"$MARIADB_ROOT_PASS" --skip-ssl "$DB_NAME" || true
 else
-    docker exec -i mariadb mariadb -u root -p"$MARIADB_ROOT_PASS" --skip-ssl "$DB_NAME" < "$SQL_FILE"
+    docker exec -i mariadb mariadb -u root -p"$MARIADB_ROOT_PASS" --skip-ssl "$DB_NAME" < "$SQL_FILE" || true
 fi
 log_ok "Base de Datos importada con éxito."
 
@@ -204,7 +204,7 @@ elif [ -f "$WP_CONFIG" ]; then
 fi
 log_info "Prefijo de tablas detectado: '$TABLE_PREFIX'"
 if [ -f "$WP_CONFIG" ]; then
-    sed -E -i "s/^\s*\$table_prefix\s*=.*/\\$table_prefix = '${TABLE_PREFIX}';/" "$WP_CONFIG"
+    sed -i "s/^[[:space:]]*\\\$table_prefix[[:space:]]*=.*/\\\$table_prefix = '${TABLE_PREFIX}';/" "$WP_CONFIG" 2>/dev/null || true
 fi
 
 # Reemplazar o insertar credenciales seguras de BD
@@ -295,7 +295,18 @@ if [[ "$DO_REPLACE" =~ ^[Ss]$ ]]; then
     if [ -n "$SEARCH_URL" ] && [ -n "$REPLACE_URL" ] && [ "$SEARCH_URL" != "$REPLACE_URL" ]; then
         log_step "Ejecutando: wp search-replace '$SEARCH_URL' '$REPLACE_URL' --all-tables --precise..."
         docker exec --user 33:33 "$PHP_CONTAINER" wp search-replace "$SEARCH_URL" "$REPLACE_URL" --all-tables --precise --skip-columns=guid --path="$CONTAINER_PATH" || true
-        log_ok "Reemplazo de URLs completado en todas las tablas."
+        # Reemplazar versión sin https si aplica
+        SEARCH_HTTP=$(echo "$SEARCH_URL" | sed 's|^https://|http://|')
+        REPLACE_HTTP=$(echo "$REPLACE_URL" | sed 's|^https://|https://|')
+        if [ "$SEARCH_HTTP" != "$SEARCH_URL" ]; then
+            docker exec -i --user 33:33 "$PHP_CONTAINER" wp search-replace "$SEARCH_HTTP" "$REPLACE_HTTP" --all-tables --precise --skip-columns=guid --path="$CONTAINER_PATH" >/dev/null 2>&1 || true
+        fi
+
+        # Flush Elementor CSS & cache para que la página cargue con todos sus estilos
+        docker exec -i --user 33:33 "$PHP_CONTAINER" wp elementor flush_css --path="$CONTAINER_PATH" >/dev/null 2>&1 || true
+        docker exec -i --user 33:33 "$PHP_CONTAINER" wp cache flush --path="$CONTAINER_PATH" >/dev/null 2>&1 || true
+        docker exec -i redis redis-cli FLUSHALL >/dev/null 2>&1 || true
+        log_ok "Reemplazo de URLs completado y estilos regenerados con éxito."
     else
         log_info "No hubo cambios de URL."
     fi

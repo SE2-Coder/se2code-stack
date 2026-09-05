@@ -4,8 +4,8 @@
 # ==============================================================================
 set -euo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-STACK_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+WG_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+STACK_ROOT="$(cd "$WG_DIR/../.." && pwd)"
 
 [ -f "$STACK_ROOT/core/banner.sh" ] && source "$STACK_ROOT/core/banner.sh"
 [ -f "$STACK_ROOT/core/ports.sh" ] && source "$STACK_ROOT/core/ports.sh"
@@ -41,9 +41,11 @@ log_ok "IP Pública del servidor: $PUBLIC_IP"
 
 # 4. Selección Dinámica de Puerto UDP
 WG_PORT=$(ask_custom_port "WireGuard VPN" "62420" "udp")
+# Limpiar cualquier caracter no numérico por seguridad
+WG_PORT=$(echo "$WG_PORT" | tr -dc '0-9')
 
 # 5. Generar .env de WireGuard
-cat << ENV_EOF > "$SCRIPT_DIR/.env"
+cat << ENV_EOF > "$WG_DIR/.env"
 WG_SERVERURL=${PUBLIC_IP}
 WG_SERVERPORT=${WG_PORT}
 WG_PEERS=2
@@ -51,26 +53,26 @@ ENV_EOF
 
 # 6. Levantar WireGuard de forma limpia
 log_step "Desplegando contenedor WireGuard en modo Host (Puerto $WG_PORT/udp)..."
-cd "$SCRIPT_DIR"
+cd "$WG_DIR"
 
 # Limpieza previa del kernel para evitar socket bloqueado
 docker compose down >/dev/null 2>&1 || true
 sudo ip link delete wg0 2>/dev/null || true
 
-mkdir -p "$SCRIPT_DIR/config"
-docker compose --env-file "$SCRIPT_DIR/.env" up -d
+mkdir -p "$WG_DIR/config"
+docker compose --env-file "$WG_DIR/.env" up -d
 
 log_info "Esperando 8 segundos para la generación de claves y perfiles..."
 sleep 8
 
 # 7. Corregir permisos para lectura de QR
-sudo chown -R "$USER:$USER" "$SCRIPT_DIR/config" 2>/dev/null || true
-sudo chmod -R 755 "$SCRIPT_DIR/config" 2>/dev/null || true
+sudo chown -R "$USER:$USER" "$WG_DIR/config" 2>/dev/null || true
+sudo chmod -R 755 "$WG_DIR/config" 2>/dev/null || true
 
 # 8. Inyectar puerto real si wg_confs/wg0.conf se generó en 51820
-if [ -f "$SCRIPT_DIR/config/wg_confs/wg0.conf" ]; then
-    sudo sed -i "s/51820/$WG_PORT/g" "$SCRIPT_DIR/config/wg_confs/wg0.conf" 2>/dev/null || true
-    sudo sed -i "s/:51820/:$WG_PORT/g" "$SCRIPT_DIR/config/peer"*/*.conf 2>/dev/null || true
+if [ -f "$WG_DIR/config/wg_confs/wg0.conf" ]; then
+    sudo sed -i "s/51820/$WG_PORT/g" "$WG_DIR/config/wg_confs/wg0.conf" 2>/dev/null || true
+    sudo sed -i "s/:51820/:$WG_PORT/g" "$WG_DIR/config/peer"*/*.conf 2>/dev/null || true
     docker compose restart >/dev/null 2>&1 || true
     sleep 3
 fi
@@ -78,8 +80,8 @@ fi
 log_ok "WireGuard VPN activo y escuchando en puerto UDP $WG_PORT."
 
 # 9. Mostrar Código QR
-if [ -f "$SCRIPT_DIR/config/peer1/peer1.conf" ] && command -v qrencode >/dev/null 2>&1; then
+if [ -f "$WG_DIR/config/peer1/peer1.conf" ] && command -v qrencode >/dev/null 2>&1; then
     echo -e "\n${C_BOLD}${C_GREEN}📱 CÓDIGO QR PARA DISPOSITIVO MÓVIL (PEER 1):${C_RESET}"
     echo -e "${C_GRAY}Escanea este código con la app oficial de WireGuard en tu teléfono:${C_RESET}\n"
-    qrencode -t ansiutf8 < "$SCRIPT_DIR/config/peer1/peer1.conf"
+    qrencode -t ansiutf8 < "$WG_DIR/config/peer1/peer1.conf"
 fi

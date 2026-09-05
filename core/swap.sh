@@ -3,8 +3,8 @@
 # se2Code Stack Server - Core: Escudo de Swap Automático
 # ==============================================================================
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-[ -f "$SCRIPT_DIR/banner.sh" ] && source "$SCRIPT_DIR/banner.sh"
+CORE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+[ -f "$CORE_DIR/banner.sh" ] && source "$CORE_DIR/banner.sh"
 
 create_swap_shield() {
     local SWAP_SIZE_GB="${1:-2}"

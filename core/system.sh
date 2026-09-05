@@ -3,8 +3,8 @@
 # se2Code Stack Server - Core: Instalador de Sistema, Docker y Dependencias
 # ==============================================================================
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-[ -f "$SCRIPT_DIR/banner.sh" ] && source "$SCRIPT_DIR/banner.sh"
+CORE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+[ -f "$CORE_DIR/banner.sh" ] && source "$CORE_DIR/banner.sh"
 
 check_os_compatibility() {
     log_step "Verificando compatibilidad del Sistema Operativo..."

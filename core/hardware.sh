@@ -3,8 +3,8 @@
 # se2Code Stack Server - Core: Hardware Profiler & Sizing Advisor
 # ==============================================================================
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-[ -f "$SCRIPT_DIR/banner.sh" ] && source "$SCRIPT_DIR/banner.sh"
+CORE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+[ -f "$CORE_DIR/banner.sh" ] && source "$CORE_DIR/banner.sh"
 
 get_hardware_specs() {
     # 1. Detección de CPU Cores
@@ -112,8 +112,8 @@ validate_site_capacity() {
                 return 0
                 ;;
             2)
-                if [ -f "$SCRIPT_DIR/swap.sh" ]; then
-                    source "$SCRIPT_DIR/swap.sh"
+                if [ -f "$CORE_DIR/swap.sh" ]; then
+                    source "$CORE_DIR/swap.sh"
                     create_swap_shield 2
                 fi
                 echo "$REQUESTED"

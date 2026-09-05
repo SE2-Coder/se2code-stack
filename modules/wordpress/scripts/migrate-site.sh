@@ -220,11 +220,15 @@ if [ -f "$WP_CONFIG" ]; then
     sed -i "/WP_REDIS_PREFIX/d" "$WP_CONFIG"
     sed -i "/DISABLE_WP_CRON/d" "$WP_CONFIG"
     sed -i "/WP_CACHE/d" "$WP_CONFIG"
+    sed -i "/WP_HOME/d" "$WP_CONFIG"
+    sed -i "/WP_SITEURL/d" "$WP_CONFIG"
 
     # Insertar optimizaciones se2Code antes de table_prefix
     cat << CFG_SNIPPET > /tmp/se2code_snippet.txt
 
 // Optimizaciones Maestras se2Code Stack (Auto-Inyectadas)
+define( 'WP_HOME', 'https://${DOMAIN}' );
+define( 'WP_SITEURL', 'https://${DOMAIN}' );
 define( 'FORCE_SSL_ADMIN', true );
 define( 'DISALLOW_FILE_EDIT', true );
 define( 'WP_MEMORY_LIMIT', '1024M' );

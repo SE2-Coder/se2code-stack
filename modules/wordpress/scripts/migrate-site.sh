@@ -154,7 +154,8 @@ MARIADB_ROOT_PASS=$(grep -E "^MYSQL_ROOT_PASSWORD=" "$STACK_ROOT/.env" 2>/dev/nu
 docker exec mariadb mariadb -u root -p"$MARIADB_ROOT_PASS" --skip-ssl -e "
 DROP DATABASE IF EXISTS \`${DB_NAME}\`;
 CREATE DATABASE \`${DB_NAME}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-CREATE USER IF NOT EXISTS '${DB_USER}'@'%' IDENTIFIED BY '${DB_PASS}';
+DROP USER IF EXISTS '${DB_USER}'@'%';
+CREATE USER '${DB_USER}'@'%' IDENTIFIED BY '${DB_PASS}';
 GRANT ALL PRIVILEGES ON \`${DB_NAME}\`.* TO '${DB_USER}'@'%';
 FLUSH PRIVILEGES;" 2>/dev/null || true
 log_ok "Base de Datos '${DB_NAME}' y usuario '${DB_USER}' listos para recibir los datos."
@@ -192,20 +193,26 @@ log_section "CONECTANDO Y RECONFIGURANDO WP-CONFIG.PHP"
 
 WP_CONFIG="$SITE_WEB_DIR/wp-config.php"
 
-# Detectar prefijo de tablas original
+# Detectar prefijo de tablas real (desde MariaDB o wp-config)
 TABLE_PREFIX="wp_"
-if [ -f "$WP_CONFIG" ]; then
-    DETECTED_PREFIX=$(grep -E "^\s*\\\$table_prefix\s*=" "$WP_CONFIG" | head -n 1 | cut -d"'" -f2 2>/dev/null || true)
-    [ -n "$DETECTED_PREFIX" ] && TABLE_PREFIX="$DETECTED_PREFIX"
+DB_DETECTED_PREFIX=$(docker exec mariadb mariadb -u root -p"$MARIADB_ROOT_PASS" --skip-ssl -e "SELECT table_name FROM information_schema.tables WHERE table_schema = '${DB_NAME}' AND table_name LIKE '%options' LIMIT 1;" 2>/dev/null | tail -n 1 | sed 's/options$//' || true)
+if [ -n "$DB_DETECTED_PREFIX" ]; then
+    TABLE_PREFIX="$DB_DETECTED_PREFIX"
+elif [ -f "$WP_CONFIG" ]; then
+    FILE_PREFIX=$(grep -E "^\s*\\$table_prefix\s*=" "$WP_CONFIG" | head -n 1 | cut -d"'" -f2 2>/dev/null || true)
+    [ -n "$FILE_PREFIX" ] && TABLE_PREFIX="$FILE_PREFIX"
 fi
 log_info "Prefijo de tablas detectado: '$TABLE_PREFIX'"
+if [ -f "$WP_CONFIG" ]; then
+    sed -E -i "s/^\s*\$table_prefix\s*=.*/\\$table_prefix = '${TABLE_PREFIX}';/" "$WP_CONFIG"
+fi
 
 # Reemplazar o insertar credenciales seguras de BD
 if [ -f "$WP_CONFIG" ]; then
-    sed -i "s/define(\s*['\"]DB_NAME['\"].*/define( 'DB_NAME', '${DB_NAME}' );/" "$WP_CONFIG"
-    sed -i "s/define(\s*['\"]DB_USER['\"].*/define( 'DB_USER', '${DB_USER}' );/" "$WP_CONFIG"
-    sed -i "s/define(\s*['\"]DB_PASSWORD['\"].*/define( 'DB_PASSWORD', '${DB_PASS}' );/" "$WP_CONFIG"
-    sed -i "s/define(\s*['\"]DB_HOST['\"].*/define( 'DB_HOST', 'mariadb:3306' );/" "$WP_CONFIG"
+    sed -E -i "s/define\s*\(\s*['\"]DB_NAME['\"].*/define( 'DB_NAME', '${DB_NAME}' );/" "$WP_CONFIG"
+    sed -E -i "s/define\s*\(\s*['\"]DB_USER['\"].*/define( 'DB_USER', '${DB_USER}' );/" "$WP_CONFIG"
+    sed -E -i "s/define\s*\(\s*['\"]DB_PASSWORD['\"].*/define( 'DB_PASSWORD', '${DB_PASS}' );/" "$WP_CONFIG"
+    sed -E -i "s/define\s*\(\s*['\"]DB_HOST['\"].*/define( 'DB_HOST', 'mariadb:3306' );/" "$WP_CONFIG"
 
     # Eliminar configuraciones de hosts o puertos anteriores
     sed -i "/WP_REDIS_HOST/d" "$WP_CONFIG"

@@ -3,7 +3,6 @@
 # se2Code Stack Server - Core: Hardware Profiler & Sizing Advisor
 # ==============================================================================
 
-# Cargar estilos si están disponibles
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 [ -f "$SCRIPT_DIR/banner.sh" ] && source "$SCRIPT_DIR/banner.sh"
 
@@ -47,8 +46,11 @@ get_hardware_specs() {
     else
         AVAIL_FOR_SITES=$((RAM_TOTAL_MB - BASE_STACK_MB))
         MAX_SAFE_SITES=$((AVAIL_FOR_SITES / SITE_COST_MB))
-        [ "$MAX_SAFE_SITES" -lt 1 ] && MAX_SAFE_SITES=1
+        if [ "$MAX_SAFE_SITES" -lt 1 ]; then
+            MAX_SAFE_SITES=1
+        fi
     fi
+    return 0
 }
 
 show_hardware_diagnostics() {
@@ -75,6 +77,7 @@ show_hardware_diagnostics() {
     echo -e "  ${C_BOLD}Consumo Base del Stack (NGINX+DB+Redis+SO)${C_RESET} : ~${BASE_STACK_MB} MB RAM"
     echo -e "  ${C_BOLD}Capacidad Máxima Recomendada${C_RESET}              : ${C_BOLD}${C_GREEN}${MAX_SAFE_SITES} Sitio(s) WordPress${C_RESET}"
     echo -e "${C_CYAN}================================================================${C_RESET}\n"
+    return 0
 }
 
 validate_site_capacity() {
@@ -128,4 +131,5 @@ validate_site_capacity() {
         esac
     fi
     echo "$REQUESTED"
+    return 0
 }

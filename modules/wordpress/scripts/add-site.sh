@@ -227,6 +227,24 @@ WPCONF
         log_ok "wp-config.php generado con credenciales aisladas para [$INSTANCE_NAME]."
     fi
 
+    # Pre-instalar plugins de infraestructura obligatorios (Redis Cache y Nginx Helper)
+    mkdir -p "$INSTANCE_DIR/wp-content/plugins"
+    if [ ! -d "$INSTANCE_DIR/wp-content/plugins/redis-cache" ]; then
+        log_info "Pre-instalando plugin obligatorio redis-cache..."
+        curl -sSL https://downloads.wordpress.org/plugin/redis-cache.latest-stable.zip -o /tmp/redis-cache.zip 2>/dev/null && \
+        unzip -q -o /tmp/redis-cache.zip -d "$INSTANCE_DIR/wp-content/plugins/" 2>/dev/null && \
+        rm -f /tmp/redis-cache.zip || true
+        [ -f "$INSTANCE_DIR/wp-content/plugins/redis-cache/includes/object-cache.php" ] && \
+        cp "$INSTANCE_DIR/wp-content/plugins/redis-cache/includes/object-cache.php" "$INSTANCE_DIR/wp-content/object-cache.php" 2>/dev/null || true
+    fi
+
+    if [ ! -d "$INSTANCE_DIR/wp-content/plugins/nginx-helper" ]; then
+        log_info "Pre-instalando plugin obligatorio nginx-helper..."
+        curl -sSL https://downloads.wordpress.org/plugin/nginx-helper.latest-stable.zip -o /tmp/nginx-helper.zip 2>/dev/null && \
+        unzip -q -o /tmp/nginx-helper.zip -d "$INSTANCE_DIR/wp-content/plugins/" 2>/dev/null && \
+        rm -f /tmp/nginx-helper.zip || true
+    fi
+
     # Registrar datos de salida
     SUMMARY_DATA+=("Instancia: [$INSTANCE_NAME] -> URL: https://${DOMAIN}${URL_PATH} | BD: ${DB_NAME} | User: ${DB_USER} | Pass: ${DB_PASS}")
 }
@@ -271,3 +289,18 @@ for item in "${SUMMARY_DATA[@]}"; do
     echo -e "  » ${item}"
 done
 echo ""
+
+echo -e "${C_BOLD}${C_YELLOW}⚡ ARQUITECTURA DE CACHÉ SE2CODE (REGLA FUNDAMENTAL):${C_RESET}"
+echo -e "  ${C_CYAN}----------------------------------------------------------------------${C_RESET}"
+echo -e "  ✔ ${C_GREEN}Nginx FastCGI Cache${C_RESET} preconfigurado a nivel de servidor (RAM/Disco)."
+echo -e "  ✔ ${C_GREEN}Redis Object Cache${C_RESET} preconfigurado en memoria RAM (Consultas MySQL)."
+echo -e "  ✔ ${C_GREEN}Nginx Helper & Redis Cache${C_RESET} pre-instalados con opciones óptimas."
+echo -e ""
+echo -e "  ${C_BOLD}${C_RED}⚠️  ¡NO INSTALES NINGÚN PLUGIN DE CACHÉ ADICIONAL!${C_RESET}"
+echo -e "  Plugins como ${C_YELLOW}WP Rocket, LiteSpeed Cache, W3 Total Cache, WP Super Cache${C_RESET}"
+echo -e "  o ${C_YELLOW}WP Fastest Cache${C_RESET} son innecesarios y ${C_RED}degradan el rendimiento${C_RESET}."
+echo -e ""
+echo -e "  Si acabas de ${C_BOLD}migrar${C_RESET} este sitio desde otro servidor, ejecuta en cualquier momento:"
+echo -e "  👉 ${C_CYAN}se2code${C_RESET} -> Opción 9 (${C_YELLOW}Optimizar Sitio / Post-Migración${C_RESET})"
+echo -e "  para desactivar automáticamente los plugins de caché del proveedor anterior."
+echo -e "  ${C_CYAN}----------------------------------------------------------------------${C_RESET}\n"

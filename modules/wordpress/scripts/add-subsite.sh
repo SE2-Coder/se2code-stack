@@ -133,6 +133,29 @@ WPCONF
     log_ok "wp-config.php generado con credenciales aisladas para [/$SUB_NAME/]."
 fi
 
+# Instalar Acelerador se2Code
+mkdir -p "$TARGET_DIR/wp-content/mu-plugins"
+cp "$STACK_ROOT/templates/se2code-core.php.tpl" "$TARGET_DIR/wp-content/mu-plugins/se2code-core.php"
+chmod 644 "$TARGET_DIR/wp-content/mu-plugins/se2code-core.php"
+
+# Pre-instalar plugins obligatorios
+mkdir -p "$TARGET_DIR/wp-content/plugins"
+if [ ! -d "$TARGET_DIR/wp-content/plugins/redis-cache" ]; then
+    log_info "Pre-instalando plugin obligatorio redis-cache..."
+    curl -sSL https://downloads.wordpress.org/plugin/redis-cache.latest-stable.zip -o /tmp/redis-cache.zip 2>/dev/null && \
+    unzip -q -o /tmp/redis-cache.zip -d "$TARGET_DIR/wp-content/plugins/" 2>/dev/null && \
+    rm -f /tmp/redis-cache.zip || true
+    [ -f "$TARGET_DIR/wp-content/plugins/redis-cache/includes/object-cache.php" ] && \
+    cp "$TARGET_DIR/wp-content/plugins/redis-cache/includes/object-cache.php" "$TARGET_DIR/wp-content/object-cache.php" 2>/dev/null || true
+fi
+
+if [ ! -d "$TARGET_DIR/wp-content/plugins/nginx-helper" ]; then
+    log_info "Pre-instalando plugin obligatorio nginx-helper..."
+    curl -sSL https://downloads.wordpress.org/plugin/nginx-helper.latest-stable.zip -o /tmp/nginx-helper.zip 2>/dev/null && \
+    unzip -q -o /tmp/nginx-helper.zip -d "$TARGET_DIR/wp-content/plugins/" 2>/dev/null && \
+    rm -f /tmp/nginx-helper.zip || true
+fi
+
 # Actualizar NGINX vHost si no tiene la regla para esta subcarpeta
 if ! grep -q "location /${SUB_NAME}/ {" "$VHOST_FILE"; then
     RULE="\n    # Enrutamiento Sub-WordPress: /${SUB_NAME}/\n    location /${SUB_NAME}/ {\n        try_files \$uri \$uri/ /${SUB_NAME}/index.php?\$args;\n    }\n"
@@ -153,3 +176,11 @@ echo -e "  - Carpeta Web   : ${TARGET_DIR}"
 echo -e "  - Base de Datos : ${C_GREEN}${DB_NAME}${C_RESET}"
 echo -e "  - Usuario BD    : ${C_CYAN}${DB_USER}${C_RESET} (Aislado)"
 echo -e "  - Contraseña BD : ${DB_PASS}\n"
+
+echo -e "${C_BOLD}${C_YELLOW}⚡ ARQUITECTURA DE CACHÉ SE2CODE (REGLA FUNDAMENTAL):${C_RESET}"
+echo -e "  ${C_CYAN}----------------------------------------------------------------------${C_RESET}"
+echo -e "  ✔ ${C_GREEN}Nginx FastCGI Cache${C_RESET} preconfigurado a nivel de servidor."
+echo -e "  ✔ ${C_GREEN}Redis Object Cache${C_RESET} preconfigurado en RAM con prefijo: ${C_CYAN}${SITE_SLUG}_${SUB_NAME}_${C_RESET}"
+echo -e "  ⚠️  ${C_BOLD}${C_RED}¡NO INSTALES NINGÚN PLUGIN DE CACHÉ ADICIONAL!${C_RESET}"
+echo -e "  Plugins como WP Rocket o LiteSpeed Cache entran en conflicto y ralentizan el sitio."
+echo -e "  ${C_CYAN}----------------------------------------------------------------------${C_RESET}\n"

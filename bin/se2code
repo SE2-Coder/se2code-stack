@@ -46,23 +46,24 @@ while true; do
     echo -e "  5) 🔄 Cambiar versión de PHP de un sitio (8.4 ↔ 8.5)"
     echo -e "  6) 🔑 Actualizar / Pegar Certificados SSL de Cloudflare"
     echo -e "  7) 💾 Respaldos Granulares (Base de datos, Archivos o Full)"
-    echo -e "  8) ⚡ Purgar Cachés del Servidor (FastCGI Cache + Redis)"
+    echo -e "  8) 🧹 Purgar Cachés del Servidor (FastCGI Cache + Redis)"
+    echo -e "  9) 🚀 Optimizar Sitio / Post-Migración (Redis + Nginx Helper)"
     echo -e ""
 
     # Menú condicional de WireGuard
     if [ "$WG_RUNNING" = true ]; then
         echo -e "  ${C_BOLD}${C_CYAN}[ GESTIÓN DE WIREGUARD VPN (Activo ✔) ]${C_RESET}"
-        echo -e "  9) 📱 Mostrar Código QR para Celular (Peer 1)"
-        echo -e " 10) 👥 Ver conexiones activas y estado del túnel"
-        echo -e " 11) ⏹️  Detener WireGuard VPN"
+        echo -e " 10) 📱 Mostrar Código QR para Celular (Peer 1)"
+        echo -e " 11) 👥 Ver conexiones activas y estado del túnel"
+        echo -e " 12) ⏹️  Detener WireGuard VPN"
         echo -e ""
         echo -e "  ${C_BOLD}${C_CYAN}[ SISTEMA Y RENDIMIENTO ]${C_RESET}"
-        echo -e " 12) 📊 Diagnóstico de Hardware y Memoria en vivo"
-        echo -e " 13) 🛡️  Activar / Ajustar Escudo de Memoria Swap"
-        echo -e " 14) ❌ Salir"
+        echo -e " 13) 📊 Diagnóstico de Hardware y Memoria en vivo"
+        echo -e " 14) 🛡️  Activar / Ajustar Escudo de Memoria Swap"
+        echo -e " 15) ❌ Salir"
         echo -e "${C_CYAN}================================================================${C_RESET}"
 
-        read -r -p "Selecciona una opción [1-14]: " MENU_CHOICE
+        read -r -p "Selecciona una opción [1-15]: " MENU_CHOICE
 
         case "$MENU_CHOICE" in
             1)
@@ -127,30 +128,34 @@ while true; do
                 read -r -p "Presiona ENTER para volver al menú..." _
                 ;;
             9)
+                bash "$STACK_ROOT/modules/wordpress/scripts/optimize-site.sh"
+                read -r -p "Presiona ENTER para volver al menú..." _
+                ;;
+            10)
                 echo -e "\n${C_BOLD}${C_GREEN}📱 Código QR de WireGuard (Peer 1 Móvil):${C_RESET}\n"
                 qrencode -t ansiutf8 < "$STACK_ROOT/modules/wireguard/config/peer1/peer1.conf"
                 read -r -p "Presiona ENTER para volver al menú..." _
                 ;;
-            10)
+            11)
                 echo -e "\n${C_BOLD}--- Conexiones Activas de WireGuard VPN ---${C_RESET}"
                 docker exec wireguard wg show 2>/dev/null || log_warn "El contenedor de WireGuard no está corriendo."
                 read -r -p "Presiona ENTER para volver al menú..." _
                 ;;
-            11)
+            12)
                 log_step "Deteniendo servicio WireGuard VPN..."
                 docker compose -f "$STACK_ROOT/modules/wireguard/docker-compose.yml" down >/dev/null 2>&1 || docker stop wireguard >/dev/null 2>&1 || true
                 log_ok "WireGuard VPN detenido."
                 read -r -p "Presiona ENTER para volver al menú..." _
                 ;;
-            12)
+            13)
                 show_hardware_diagnostics
                 read -r -p "Presiona ENTER para volver al menú..." _
                 ;;
-            13)
+            14)
                 create_swap_shield 2
                 read -r -p "Presiona ENTER para volver al menú..." _
                 ;;
-            14|q|Q)
+            15|q|Q)
                 echo -e "\n${C_CYAN}¡Hasta pronto! Gracias por usar se2Code Stack.${C_RESET}\n"
                 exit 0
                 ;;
@@ -161,15 +166,15 @@ while true; do
         esac
     else
         echo -e "  ${C_BOLD}${C_CYAN}[ MÓDULOS OPCIONALES ]${C_RESET}"
-        echo -e "  9) 🛡️  Instalar y Configurar WireGuard VPN"
+        echo -e " 10) 🛡️  Instalar y Configurar WireGuard VPN"
         echo -e ""
         echo -e "  ${C_BOLD}${C_CYAN}[ SISTEMA Y RENDIMIENTO ]${C_RESET}"
-        echo -e " 10) 📊 Diagnóstico de Hardware y Memoria en vivo"
-        echo -e " 11) 🛡️  Activar / Ajustar Escudo de Memoria Swap"
-        echo -e " 12) ❌ Salir"
+        echo -e " 11) 📊 Diagnóstico de Hardware y Memoria en vivo"
+        echo -e " 12) 🛡️  Activar / Ajustar Escudo de Memoria Swap"
+        echo -e " 13) ❌ Salir"
         echo -e "${C_CYAN}================================================================${C_RESET}"
 
-        read -r -p "Selecciona una opción [1-12]: " MENU_CHOICE
+        read -r -p "Selecciona una opción [1-13]: " MENU_CHOICE
 
         case "$MENU_CHOICE" in
             1)
@@ -234,18 +239,22 @@ while true; do
                 read -r -p "Presiona ENTER para volver al menú..." _
                 ;;
             9)
-                bash "$STACK_ROOT/modules/wireguard/setup-vpn.sh"
+                bash "$STACK_ROOT/modules/wordpress/scripts/optimize-site.sh"
                 read -r -p "Presiona ENTER para volver al menú..." _
                 ;;
             10)
-                show_hardware_diagnostics
+                bash "$STACK_ROOT/modules/wireguard/setup-vpn.sh"
                 read -r -p "Presiona ENTER para volver al menú..." _
                 ;;
             11)
+                show_hardware_diagnostics
+                read -r -p "Presiona ENTER para volver al menú..." _
+                ;;
+            12)
                 create_swap_shield 2
                 read -r -p "Presiona ENTER para volver al menú..." _
                 ;;
-            12|q|Q)
+            13|q|Q)
                 echo -e "\n${C_CYAN}¡Hasta pronto! Gracias por usar se2Code Stack.${C_RESET}\n"
                 exit 0
                 ;;

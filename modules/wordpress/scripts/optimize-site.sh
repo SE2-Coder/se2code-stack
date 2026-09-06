@@ -201,7 +201,12 @@ find "$SITE_WEB_DIR" -type f -exec chmod 644 {} + 2>/dev/null || true
 [ -f "$WP_CONFIG" ] && chmod 600 "$WP_CONFIG"
 log_ok "Permisos establecidos: directorios 755, archivos 644, wp-config 600 (usuario www-data)."
 
-# 7. Purga de Caché de Validación, Transients y Reinicio de PHP
+# 7. Purga de Caché de Validación, Transients y Acondicionamiento de Elementor
+log_step "Optimizando Elementor y acondicionando permisos de caché FastCGI..."
+docker exec --user 33:33 "$PHP_CONTAINER" wp option update elementor_editor_break_frames 1 --path="$CONTAINER_PATH" >/dev/null 2>&1 || true
+docker exec --user 33:33 "$PHP_CONTAINER" wp option update elementor_allow_tracking 'no' --path="$CONTAINER_PATH" >/dev/null 2>&1 || true
+docker exec wp-nginx chmod -R 777 /var/cache/nginx >/dev/null 2>&1 || true
+
 log_step "Purgando transients expirados y regenerando estilos de Elementor..."
 docker exec --user 33:33 "$PHP_CONTAINER" wp transient delete --all --path="$CONTAINER_PATH" >/dev/null 2>&1 || true
 docker exec --user 33:33 "$PHP_CONTAINER" wp elementor flush_css --path="$CONTAINER_PATH" >/dev/null 2>&1 || true

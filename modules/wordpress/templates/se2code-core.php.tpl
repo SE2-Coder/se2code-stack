@@ -3,7 +3,7 @@
  * Plugin Name: se2Code Performance & Cloud Accelerator
  * Description: Elimina latencias de red, previene conflictos de caché, autoconfigura Nginx FastCGI + Redis y optimiza Elementor.
  * Author: se2Code
- * Version: 1.3.0
+ * Version: 1.4.0
  */
 
 if ( ! defined( 'ABSPATH' ) ) {
@@ -48,7 +48,7 @@ add_filter( 'pre_http_request', function( $pre, $args, $url ) {
 }, 10, 3 );
 
 // ==============================================================================
-// 3. ELEMENTOR & CLOUDFLARE: CABECERAS Y BYPASS DE ROCKET LOADER
+// 3. ELEMENTOR & CLOUDFLARE: CABECERAS, BYPASS DE ROCKET LOADER Y BLINDAJE JS
 // ==============================================================================
 add_action( 'send_headers', function() {
     if ( is_admin() || isset( $_GET['elementor-preview'] ) || ( isset( $_GET['action'] ) && 'elementor' === $_GET['action'] ) ) {
@@ -56,6 +56,21 @@ add_action( 'send_headers', function() {
         header( 'cf-rocket-loader: off' );
     }
 } );
+
+// Inyectar data-cfasync="false" en todos los scripts del editor y previsualización de Elementor
+add_action( 'template_redirect', 'se2code_shield_elementor_cfasync', -9999 );
+add_action( 'admin_init', 'se2code_shield_elementor_cfasync', -9999 );
+
+function se2code_shield_elementor_cfasync() {
+    if ( ( isset( $_GET['action'] ) && 'elementor' === $_GET['action'] ) || isset( $_GET['elementor-preview'] ) ) {
+        ob_start( function( $buffer ) {
+            if ( false !== strpos( $buffer, '<script' ) ) {
+                $buffer = preg_replace( '/<script\b(?![^>]*data-cfasync)/i', '<script data-cfasync="false"', $buffer );
+            }
+            return $buffer;
+        } );
+    }
+}
 
 add_filter( 'script_loader_tag', function( $tag, $handle ) {
     if ( is_admin() || ( isset( $_GET['action'] ) && 'elementor' === $_GET['action'] ) ) {
@@ -66,14 +81,20 @@ add_filter( 'script_loader_tag', function( $tag, $handle ) {
     return $tag;
 }, 10, 2 );
 
-// Polyfill seguro de Elementor v2
-add_action( 'admin_head', 'se2code_inject_elementor_v2_poly', 1 );
-add_action( 'wp_head', 'se2code_inject_elementor_v2_poly', 1 );
-add_action( 'elementor/editor/before_enqueue_scripts', 'se2code_inject_elementor_v2_poly', 1 );
+// Inyectar stubs y polyfills seguros para Elementor y plugins de terceros en <head>
+add_action( 'admin_head', 'se2code_inject_elementor_safeguards', 0 );
+add_action( 'wp_head', 'se2code_inject_elementor_safeguards', 0 );
+add_action( 'elementor/editor/before_enqueue_scripts', 'se2code_inject_elementor_safeguards', 0 );
 
-function se2code_inject_elementor_v2_poly() {
-    if ( isset( $_GET['action'] ) && 'elementor' === $_GET['action'] ) {
+function se2code_inject_elementor_safeguards() {
+    if ( ( isset( $_GET['action'] ) && 'elementor' === $_GET['action'] ) || isset( $_GET['elementor-preview'] ) ) {
         echo '<script data-cfasync="false">
+            /* se2Code Cloud Shield - Elementor Config & V2 Guards */
+            window.ElementorConfig = window.ElementorConfig || {
+                settings: { dynamicooo: false },
+                home_url: window.location.origin,
+                version: "3.35.5"
+            };
             window.elementorV2 = window.elementorV2 || {};
             window.elementorV2.editorCurrentUser = window.elementorV2.editorCurrentUser || {
                 useCurrentUserCapabilities: function() { return { isAdmin: true, canUser: function() { return true; }, capabilities: ["manage_options"] }; },
@@ -88,10 +109,10 @@ function se2code_inject_elementor_v2_poly() {
     }
 }
 
-// Invalidar caché CDN de Cloudflare en scripts Elementor
+// Cache busting para assets de Elementor
 add_filter( 'script_loader_src', function( $src, $handle ) {
     if ( strpos( $src, 'elementor' ) !== false && strpos( $src, 'ver=' ) !== false ) {
-        $src = add_query_arg( 'se2v', '3', $src );
+        $src = add_query_arg( 'se2v', '4', $src );
     }
     return $src;
 }, 99, 2 );

@@ -46,6 +46,15 @@ check_os_compatibility
 install_system_dependencies
 install_docker_engine
 
+# 3.1 Hardening del Servidor (Opcional)
+echo -e "\n${C_BOLD}${C_CYAN}¿Deseas aplicar el módulo de Hardening y Securización del Servidor?${C_RESET}"
+echo -e "${C_GRAY}(Usuario administrador no-root, contraseña sudo, SSH no estándar, UFW, Fail2ban, Kernel)${C_RESET}"
+read -rp "¿Ejecutar Hardening ahora? [s/N]: " RUN_HARDENING
+RUN_HARDENING=${RUN_HARDENING:-N}
+if [[ "$RUN_HARDENING" =~ ^[Ss]$ ]]; then
+    bash "${BASE_DIR}/core/hardening.sh"
+fi
+
 # 4. Service Selection Menu
 echo -e "\n${C_BOLD}${C_CYAN}¿Qué módulos deseas desplegar en este servidor?${C_RESET}"
 echo -e "  ${C_BOLD}1)${C_RESET} Stack WordPress Completo (Nginx + PHP 8.4/8.5 + MariaDB + Redis)"

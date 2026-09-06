@@ -3,7 +3,7 @@
  * Plugin Name: se2Code Performance & Cloud Accelerator
  * Description: Elimina latencias de red, previene conflictos de caché, autoconfigura Nginx FastCGI + Redis y optimiza Elementor.
  * Author: se2Code
- * Version: 1.6.0
+ * Version: 1.7.0
  */
 
 if ( ! defined( 'ABSPATH' ) ) {
@@ -16,16 +16,31 @@ if ( ! defined( 'RT_WP_NGINX_HELPER_CACHE_PATH' ) ) {
 }
 
 // ==============================================================================
-// 1. RED Y RENDIMIENTO: FORZAR IPv4 EN cURL Y LIMITAR TIMEOUTS DE RED
+// 1. RED Y RENDIMIENTO: FORZAR IPv4 Y BYPASS DE LOOPBACK NAT HAIRPINNING (CLOUDFLARE)
 // ==============================================================================
-add_action( 'http_api_curl', function( $handle ) {
+add_action( 'http_api_curl', function( $handle, $r, $url ) {
     curl_setopt( $handle, CURLOPT_IPRESOLVE, CURL_IPRESOLVE_V4 );
-    curl_setopt( $handle, CURLOPT_CONNECTTIMEOUT, 3 );
-    curl_setopt( $handle, CURLOPT_TIMEOUT, 6 );
-} );
+    curl_setopt( $handle, CURLOPT_CONNECTTIMEOUT, 5 );
+    curl_setopt( $handle, CURLOPT_TIMEOUT, 10 );
+
+    // Enrutar llamadas loopback internas directamente a wp-nginx en la red de Docker
+    $host = parse_url( $url, PHP_URL_HOST );
+    $current_host = parse_url( home_url(), PHP_URL_HOST );
+    if ( $host && ( $host === $current_host || ( isset( $_SERVER['HTTP_HOST'] ) && $host === $_SERVER['HTTP_HOST'] ) ) ) {
+        $nginx_ip = gethostbyname( 'wp-nginx' );
+        if ( $nginx_ip && $nginx_ip !== 'wp-nginx' ) {
+            curl_setopt( $handle, CURLOPT_RESOLVE, [
+                "{$host}:443:{$nginx_ip}",
+                "{$host}:80:{$nginx_ip}"
+            ] );
+            curl_setopt( $handle, CURLOPT_SSL_VERIFYHOST, 0 );
+            curl_setopt( $handle, CURLOPT_SSL_VERIFYPEER, 0 );
+        }
+    }
+}, 10, 3 );
 
 add_filter( 'http_request_args', function( $args ) {
-    $args['timeout'] = min( 6, (int) ( $args['timeout'] ?? 6 ) );
+    $args['timeout'] = min( 10, (int) ( $args['timeout'] ?? 10 ) );
     return $args;
 } );
 

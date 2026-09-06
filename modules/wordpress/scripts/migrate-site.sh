@@ -328,7 +328,9 @@ if [ ! -d "$SITE_WEB_DIR/wp-content/plugins/nginx-helper" ]; then
 fi
 
 mkdir -p "$SITE_WEB_DIR/wp-content/mu-plugins"
-cp "$STACK_ROOT/templates/se2code-core.php.tpl" "$SITE_WEB_DIR/wp-content/mu-plugins/se2code-core.php" 2>/dev/null || true
+SE2CODE_TPL="$STACK_ROOT/modules/wordpress/templates/se2code-core.php.tpl"
+[ ! -f "$SE2CODE_TPL" ] && SE2CODE_TPL="$STACK_ROOT/templates/se2code-core.php.tpl"
+cp "$SE2CODE_TPL" "$SITE_WEB_DIR/wp-content/mu-plugins/se2code-core.php" 2>/dev/null || true
 chmod 644 "$SITE_WEB_DIR/wp-content/mu-plugins/se2code-core.php" 2>/dev/null || true
 rm -f "$SITE_WEB_DIR/wp-content/mu-plugins/wp-staging-optimizer.php" 2>/dev/null || true
 log_ok "Plugins de infraestructura y se2code-core.php listos en el sitio."
@@ -347,6 +349,16 @@ docker restart "$PHP_CONTAINER" >/dev/null 2>&1 || true
 docker exec wp-nginx nginx -t >/dev/null 2>&1 && docker exec wp-nginx nginx -s reload 2>/dev/null || docker restart wp-nginx >/dev/null 2>&1 || true
 log_ok "NGINX recargado y motor PHP activado con el nuevo pool."
 
+# Desactivación preventiva de plugins de ofuscación de login o URLs que rompen migraciones
+for sec_plug in "hide-my-wp" "wps-hide-login" "wp-hide-security-enhancer" "rename-wp-login" "lockdown-wp-admin"; do
+    if docker exec --user 33:33 "$PHP_CONTAINER" wp plugin is-installed "$sec_plug" --path="$CONTAINER_PATH" >/dev/null 2>&1; then
+        if docker exec --user 33:33 "$PHP_CONTAINER" wp plugin is-active "$sec_plug" --path="$CONTAINER_PATH" >/dev/null 2>&1; then
+            log_warn "Plugin de ofuscación de login detectado: '$sec_plug'. Desactivando preventivamente para evitar bloqueos del panel y assets rotos..."
+            docker exec --user 33:33 "$PHP_CONTAINER" wp plugin deactivate "$sec_plug" --path="$CONTAINER_PATH" >/dev/null 2>&1 || true
+        fi
+    fi
+done
+
 # 14. Cambio de Dominio / Staging (Reemplazo Canónico Multivariante)
 log_section "CAMBIO DE DOMINIO / STAGING (REEMPLAZO CANÓNICO MULTIVARIANTE)"
 
@@ -356,8 +368,11 @@ read -r -p "¿Ejecutar reemplazo canónico de dominio? [S/n]: " DO_REPLACE
 DO_REPLACE=${DO_REPLACE:-S}
 
 if [[ "$DO_REPLACE" =~ ^[Ss]$ ]]; then
-    # Detectar el dominio previo directamente desde wp_options con MariaDB en modo silencioso
-    OLD_SITEURL=$(docker exec mariadb mariadb -u root -p"$MARIADB_ROOT_PASS" --skip-ssl -N -s -e "SELECT option_value FROM `\${DB_NAME}`.\${TABLE_PREFIX}options WHERE option_name IN ('siteurl', 'home') AND option_value != '' LIMIT 1;" 2>/dev/null | tr -d '[:space:]' || true)
+    # Detectar el dominio previo: Primero vía WP-CLI, y como fallback directo en MariaDB
+    OLD_SITEURL=$(docker exec --user 33:33 "$PHP_CONTAINER" wp option get siteurl --path="$CONTAINER_PATH" 2>/dev/null | tr -d '[:space:]' || true)
+    if [ -z "$OLD_SITEURL" ]; then
+        OLD_SITEURL=$(docker exec mariadb mariadb -u root -p"$MARIADB_ROOT_PASS" --skip-ssl -N -s -e "SELECT option_value FROM \`${DB_NAME}\`.${TABLE_PREFIX}options WHERE option_name IN ('siteurl', 'home') AND option_value != '' LIMIT 1;" 2>/dev/null | tr -d '[:space:]' || true)
+    fi
     
     echo -e "\nDominio previo detectado en la BD: ${C_YELLOW}${OLD_SITEURL:-'No detectado'}${C_RESET}"
     read -r -p "Escribe el dominio viejo a buscar [ej: ${OLD_SITEURL:-https://viejo-dominio.com}]: " SEARCH_URL

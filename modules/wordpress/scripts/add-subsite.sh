@@ -135,7 +135,9 @@ fi
 
 # Instalar Acelerador se2Code
 mkdir -p "$TARGET_DIR/wp-content/mu-plugins"
-cp "$STACK_ROOT/templates/se2code-core.php.tpl" "$TARGET_DIR/wp-content/mu-plugins/se2code-core.php"
+SE2CODE_TPL="$STACK_ROOT/modules/wordpress/templates/se2code-core.php.tpl"
+[ ! -f "$SE2CODE_TPL" ] && SE2CODE_TPL="$STACK_ROOT/templates/se2code-core.php.tpl"
+cp "$SE2CODE_TPL" "$TARGET_DIR/wp-content/mu-plugins/se2code-core.php"
 chmod 644 "$TARGET_DIR/wp-content/mu-plugins/se2code-core.php"
 
 # Pre-instalar plugins obligatorios

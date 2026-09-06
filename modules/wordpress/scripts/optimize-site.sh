@@ -81,6 +81,11 @@ CONFLICTING_PLUGINS=(
     "comet-cache"
     "hyper-cache"
     "autoptimize"
+    "hide-my-wp"
+    "wps-hide-login"
+    "wp-hide-security-enhancer"
+    "rename-wp-login"
+    "lockdown-wp-admin"
 )
 
 DEACTIVATED_COUNT=0
@@ -188,7 +193,9 @@ log_ok "Capacidades de purga Nginx Helper asignadas al Administrador."
 log_section "PASO 5: INSTALANDO ACELERADOR Y BLINDAJE SE2CODE"
 
 mkdir -p "$SITE_WEB_DIR/wp-content/mu-plugins"
-cp "$STACK_ROOT/templates/se2code-core.php.tpl" "$SITE_WEB_DIR/wp-content/mu-plugins/se2code-core.php"
+SE2CODE_TPL="$STACK_ROOT/modules/wordpress/templates/se2code-core.php.tpl"
+[ ! -f "$SE2CODE_TPL" ] && SE2CODE_TPL="$STACK_ROOT/templates/se2code-core.php.tpl"
+cp "$SE2CODE_TPL" "$SITE_WEB_DIR/wp-content/mu-plugins/se2code-core.php"
 chmod 644 "$SITE_WEB_DIR/wp-content/mu-plugins/se2code-core.php"
 log_ok "se2code-core.php desplegado en mu-plugins."
 
@@ -231,7 +238,7 @@ docker exec --user 33:33 "$PHP_CONTAINER" wp transient delete --all --path="$CON
 docker exec --user 33:33 "$PHP_CONTAINER" wp elementor flush_css --path="$CONTAINER_PATH" >/dev/null 2>&1 || true
 docker exec --user 33:33 "$PHP_CONTAINER" wp cache flush --path="$CONTAINER_PATH" >/dev/null 2>&1 || true
 docker exec redis redis-cli FLUSHALL >/dev/null 2>&1 || true
-docker exec wp-nginx rm -rf /var/cache/nginx/* 2>/dev/null || true
+docker exec -u 0 wp-nginx sh -c 'rm -rf /var/cache/nginx/* 2>/dev/null || true'
 docker restart "$PHP_CONTAINER" >/dev/null 2>&1 || true
 docker exec wp-nginx nginx -s reload 2>/dev/null || true
 

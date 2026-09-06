@@ -225,7 +225,9 @@ WPCONF
 
     # Acelerador de Rendimiento se2Code (IPv4 cURL + Elementor Booster)
     mkdir -p "$INSTANCE_DIR/wp-content/mu-plugins"
-    cp "$STACK_ROOT/templates/se2code-core.php.tpl" "$INSTANCE_DIR/wp-content/mu-plugins/se2code-core.php"
+    SE2CODE_TPL="$STACK_ROOT/modules/wordpress/templates/se2code-core.php.tpl"
+    [ ! -f "$SE2CODE_TPL" ] && SE2CODE_TPL="$STACK_ROOT/templates/se2code-core.php.tpl"
+    cp "$SE2CODE_TPL" "$INSTANCE_DIR/wp-content/mu-plugins/se2code-core.php"
     chmod 644 "$INSTANCE_DIR/wp-content/mu-plugins/se2code-core.php" 
         log_ok "wp-config.php generado con credenciales aisladas para [$INSTANCE_NAME]."
     fi

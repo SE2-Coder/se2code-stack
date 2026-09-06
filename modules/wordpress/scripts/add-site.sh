@@ -28,14 +28,14 @@ fi
 
 if [ -z "$PHP_VERSION" ]; then
     echo -e "Selecciona la versión de PHP:"
-    echo -e "  1) PHP 8.5 (Última generación - Recomendada)"
-    echo -e "  2) PHP 8.4 (Estable)"
+    echo -e "  1) ${C_GREEN}PHP 8.4 (Estable - Recomendada para producción y Elementor)${C_RESET}"
+    echo -e "  2) ${C_YELLOW}PHP 8.5 (Preview experimental - No recomendada en producción)${C_RESET}"
     read -r -p "Opción [1-2, por defecto 1]: " PHP_OPT
     PHP_OPT=${PHP_OPT:-1}
     if [ "$PHP_OPT" = "2" ]; then
-        PHP_VERSION="8.4"
-    else
         PHP_VERSION="8.5"
+    else
+        PHP_VERSION="8.4"
     fi
 fi
 

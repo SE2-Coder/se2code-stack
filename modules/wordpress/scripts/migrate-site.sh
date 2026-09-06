@@ -71,7 +71,7 @@ done
 # 3. Selección de Motor PHP
 echo -e "\n${C_BOLD}--- Selección de Motor PHP ---${C_RESET}"
 echo -e "  1) ${C_GREEN}PHP 8.4 (Estable - Recomendado para producción y compatibilidad con Elementor)${C_RESET}"
-echo -e "  2) ${C_YELLOW}PHP 8.5 (Preview de última generación)${C_RESET}"
+echo -e "  2) ${C_YELLOW}PHP 8.5 (Preview experimental - No recomendada en producción)${C_RESET}"
 read -r -p "Selecciona versión [1-2, por defecto 1]: " PHP_CHOICE
 PHP_CHOICE=${PHP_CHOICE:-1}
 

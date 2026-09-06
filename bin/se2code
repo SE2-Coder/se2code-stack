@@ -15,6 +15,11 @@ STACK_ROOT="$(cd "$(dirname "$REAL_SCRIPT")/.." && pwd)"
 # Soporte para subcomandos directos por línea de comandos (CLI)
 if [ $# -gt 0 ]; then
     case "$1" in
+        ssl|manage-ssl)
+            shift
+            bash "$STACK_ROOT/modules/wordpress/scripts/manage-ssl.sh" "$@"
+            exit $?
+            ;;
         replace-urls)
             shift
             bash "$STACK_ROOT/modules/wordpress/scripts/replace-urls.sh" "$@"
@@ -84,7 +89,7 @@ while true; do
     echo -e "  4) 🌍 Agregar sub-sitio / idioma a un sitio existente (ej: /es, /en)"
     echo -e "  5) 🗑️  Eliminar un sitio (con backup automático previo)"
     echo -e "  6) 🔄 Cambiar versión de PHP de un sitio (8.4 ↔ 8.5)"
-    echo -e "  7) 🔑 Actualizar / Pegar Certificados SSL de Cloudflare"
+    echo -e "  7) 🔒 Gestión de Certificados SSL (Cloudflare / Let's Encrypt / Autofirmado)"
     echo -e "  8) 💾 Respaldos Granulares (Base de datos, Archivos o Full)"
     echo -e "  9) 🧹 Purgar Cachés del Servidor (FastCGI Cache + Redis)"
     echo -e " 10) 🚀 Optimizar Sitio Existente (Redis + Nginx Helper + Anti-Conflictos)"

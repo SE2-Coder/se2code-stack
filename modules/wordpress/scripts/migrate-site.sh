@@ -99,41 +99,66 @@ sed -e "s/{{SITE_SLUG}}/$SITE_SLUG/g" \
     "$STACK_ROOT/templates/php-pool.conf.tpl" > "$POOL_DIR/${SITE_SLUG}.conf"
 log_ok "Pool PHP-FPM generado en $POOL_DIR/${SITE_SLUG}.conf"
 
-# 6. Certificados SSL (Cloudflare Origin o Autofirmado Temporal)
+# 6. Certificados SSL (Cloudflare Origin, Let's Encrypt o Autofirmado)
 CERTS_DIR="$STACK_ROOT/nginx/certs/$DOMAIN"
 mkdir -p "$CERTS_DIR"
 
-echo -e "\n${C_BOLD}--- Certificados SSL (Cloudflare Origin Certificate) ---${C_RESET}"
-read -r -p "¿Deseas pegar ahora los certificados de Cloudflare? [S/n]: " HAS_SSL
-HAS_SSL=${HAS_SSL:-S}
+echo -e "\n${C_BOLD}${C_CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${C_RESET}"
+echo -e "  ${C_BOLD}CONFIGURACIÓN DE CERTIFICADO SSL/TLS${C_RESET}"
+echo -e "${C_CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${C_RESET}"
+echo -e "Selecciona el tipo de certificado para ${C_YELLOW}${DOMAIN}${C_RESET}:\n"
+echo -e "  1) ${C_GREEN}Pegar certificados de Cloudflare (Origin CA)${C_RESET}"
+echo -e "     ${C_GRAY}↳ Para sitios detrás de Cloudflare. Válido hasta por 15 años.${C_RESET}\n"
+echo -e "  2) ${C_CYAN}Let's Encrypt automático (acme.sh)${C_RESET}"
+echo -e "     ${C_GRAY}↳ Certificado público oficial con candado verde directo (sin Cloudflare).${C_RESET}\n"
+echo -e "  3) ${C_YELLOW}Certificado autofirmado (Rápido / Pruebas / Cloudflare)${C_RESET}"
+echo -e "     ${C_GRAY}↳ Generación instantánea. Para pruebas o si ya usas Cloudflare (modo Full).${C_RESET}\n"
 
-if [[ "$HAS_SSL" =~ ^[Ss]$ ]]; then
-    echo -e "\n${C_CYAN}Pega el Certificado de Origen (Origin Certificate) y escribe 'EOF' en una línea nueva:${C_RESET}"
-    SSL_CERT=""
-    while IFS= read -r line; do
-        [ "$line" = "EOF" ] && break
-        SSL_CERT="${SSL_CERT}${line}\n"
-    done
-    printf "%b" "$SSL_CERT" > "$CERTS_DIR/fullchain.pem"
+read -r -p "Elige una opción [1-3, por defecto 3]: " SSL_CHOICE
+SSL_CHOICE=${SSL_CHOICE:-3}
 
-    echo -e "\n${C_CYAN}Pega la Llave Privada (Private Key) y escribe 'EOF' en una línea nueva:${C_RESET}"
-    SSL_KEY=""
-    while IFS= read -r line; do
-        [ "$line" = "EOF" ] && break
-        SSL_KEY="${SSL_KEY}${line}\n"
-    done
-    printf "%b" "$SSL_KEY" > "$CERTS_DIR/privkey.pem"
-    cp "$CERTS_DIR/fullchain.pem" "$CERTS_DIR/chain.pem"
-    log_ok "Certificados SSL de Cloudflare instalados."
-else
-    log_warn "Generando certificados autofirmados temporales..."
-    openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
-        -keyout "$CERTS_DIR/privkey.pem" \
-        -out "$CERTS_DIR/fullchain.pem" \
-        -subj "/C=CO/ST=Valle/L=Cali/O=se2Code/CN=$DOMAIN" >/dev/null 2>&1
-    cp "$CERTS_DIR/fullchain.pem" "$CERTS_DIR/chain.pem"
-    log_warn "Certificados autofirmados temporales listos. Podrás actualizarlos luego con 'se2code -> Opción 7'."
-fi
+NEED_ACME=false
+
+case "$SSL_CHOICE" in
+    1)
+        echo -e "\n${C_CYAN}Pega el Certificado de Origen (Origin Certificate) y escribe 'EOF' en una línea nueva:${C_RESET}"
+        SSL_CERT=""
+        while IFS= read -r line; do
+            [ "$line" = "EOF" ] && break
+            SSL_CERT="${SSL_CERT}${line}\n"
+        done
+        printf "%b" "$SSL_CERT" > "$CERTS_DIR/fullchain.pem"
+
+        echo -e "\n${C_CYAN}Pega la Llave Privada (Private Key) y escribe 'EOF' en una línea nueva:${C_RESET}"
+        SSL_KEY=""
+        while IFS= read -r line; do
+            [ "$line" = "EOF" ] && break
+            SSL_KEY="${SSL_KEY}${line}\n"
+        done
+        printf "%b" "$SSL_KEY" > "$CERTS_DIR/privkey.pem"
+        cp "$CERTS_DIR/fullchain.pem" "$CERTS_DIR/chain.pem"
+        log_ok "Certificados SSL de Cloudflare guardados."
+        ;;
+    2)
+        log_info "Configurando certificado provisional para inicializar NGINX..."
+        openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
+            -keyout "$CERTS_DIR/privkey.pem" \
+            -out "$CERTS_DIR/fullchain.pem" \
+            -subj "/C=CO/ST=Valle/L=Cali/O=se2Code/CN=$DOMAIN" >/dev/null 2>&1
+        cp "$CERTS_DIR/fullchain.pem" "$CERTS_DIR/chain.pem"
+        NEED_ACME=true
+        log_ok "Certificado provisional listo. Se emitirá Let's Encrypt al activar los servicios."
+        ;;
+    3|*)
+        log_step "Generando certificados autofirmados..."
+        openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
+            -keyout "$CERTS_DIR/privkey.pem" \
+            -out "$CERTS_DIR/fullchain.pem" \
+            -subj "/C=CO/ST=Valle/L=Cali/O=se2Code/CN=$DOMAIN" >/dev/null 2>&1
+        cp "$CERTS_DIR/fullchain.pem" "$CERTS_DIR/chain.pem"
+        log_ok "Certificados autofirmados generados y activos."
+        ;;
+esac
 
 chmod 600 "$CERTS_DIR/privkey.pem"
 chmod 644 "$CERTS_DIR"/*.pem
@@ -348,6 +373,38 @@ docker exec "$PHP_CONTAINER" chown -R www-data:www-data /var/log/php 2>/dev/null
 docker restart "$PHP_CONTAINER" >/dev/null 2>&1 || true
 docker exec wp-nginx nginx -t >/dev/null 2>&1 && docker exec wp-nginx nginx -s reload 2>/dev/null || docker restart wp-nginx >/dev/null 2>&1 || true
 log_ok "NGINX recargado y motor PHP activado con el nuevo pool."
+
+if [ "${NEED_ACME:-false}" = true ]; then
+    log_section "EMISIÓN AUTOMÁTICA DE CERTIFICADO LET'S ENCRYPT (ACME.SH)"
+    if [ ! -f /root/.acme.sh/acme.sh ]; then
+        log_step "Instalando cliente ACME (acme.sh)..."
+        curl -sSL https://get.acme.sh | sh -s email="admin@${DOMAIN}" >/dev/null 2>&1 || true
+        ln -sf /root/.acme.sh/acme.sh /usr/local/bin/acme.sh 2>/dev/null || true
+    fi
+
+    /root/.acme.sh/acme.sh --set-default-ca --server letsencrypt >/dev/null 2>&1 || true
+    mkdir -p "$SITE_WEB_DIR/.well-known/acme-challenge"
+    chown -R 33:33 "$SITE_WEB_DIR/.well-known" 2>/dev/null || true
+    chmod -R 755 "$SITE_WEB_DIR/.well-known" 2>/dev/null || true
+
+    log_step "Solicitando certificado Let's Encrypt para '$DOMAIN' vía reto HTTP..."
+    if /root/.acme.sh/acme.sh --issue -d "$DOMAIN" -w "$SITE_WEB_DIR" --server letsencrypt; then
+        log_step "Instalando certificado en NGINX..."
+        /root/.acme.sh/acme.sh --install-cert -d "$DOMAIN" \
+            --key-file "$CERTS_DIR/privkey.pem" \
+            --fullchain-file "$CERTS_DIR/fullchain.pem" \
+            --reloadcmd "docker exec wp-nginx nginx -s reload" >/dev/null 2>&1 || true
+        cp "$CERTS_DIR/fullchain.pem" "$CERTS_DIR/chain.pem"
+        chmod 600 "$CERTS_DIR/privkey.pem"
+        chmod 644 "$CERTS_DIR"/*.pem
+        docker exec wp-nginx nginx -s reload 2>/dev/null || true
+        log_ok "¡Certificado Let's Encrypt emitido e instalado con éxito para $DOMAIN!"
+    else
+        log_warn "No se pudo validar el reto HTTP de Let's Encrypt para $DOMAIN."
+        log_warn "Se mantuvo el certificado autofirmado para garantizar operatividad inmediata."
+        log_warn "Podrás reintentar emitir Let's Encrypt más tarde desde 'se2code -> Opción 7'."
+    fi
+fi
 
 # Desactivación preventiva de plugins de ofuscación de login o URLs que rompen migraciones
 for sec_plug in "hide-my-wp" "wps-hide-login" "wp-hide-security-enhancer" "rename-wp-login" "lockdown-wp-admin"; do

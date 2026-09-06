@@ -40,7 +40,7 @@ PUBLIC_IP=$(curl -4 -s ifconfig.me || curl -4 -s icanhazip.com || curl -4 -s api
 log_ok "IP Pública del servidor: $PUBLIC_IP"
 
 # 4. Selección Dinámica de Puerto UDP
-WG_PORT=$(ask_custom_port "WireGuard VPN" "62420" "udp")
+WG_PORT=$(ask_custom_port "WireGuard VPN" "51820" "udp")
 # Limpiar cualquier caracter no numérico por seguridad
 WG_PORT=$(echo "$WG_PORT" | tr -dc '0-9')
 

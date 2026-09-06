@@ -61,8 +61,8 @@ echo -e "${C_GRAY}con el usuario 'root'. Se creará un usuario dedicado con priv
 
 ADMIN_USER=""
 while true; do
-    read -r -p "¿Qué nombre tendrá el usuario que administrará el servidor? [Por defecto: se2]: " ADMIN_USER
-    ADMIN_USER="${ADMIN_USER:-se2}"
+    read -r -p "¿Qué nombre tendrá el usuario que administrará el servidor? [Por defecto: operador]: " ADMIN_USER
+    ADMIN_USER="${ADMIN_USER:-operador}"
 
     if ! [[ "$ADMIN_USER" =~ ^[a-z_][a-z0-9_-]*$ ]]; then
         log_error "Nombre de usuario inválido. Usa solo letras minúsculas, números y guiones."
@@ -157,17 +157,49 @@ while true; do
             break
             ;;
         2)
+            echo -e "\n${C_CYAN}Protección Criptográfica con Frase de Paso (Passphrase):${C_RESET}"
+            echo -e "${C_GRAY}Una frase de paso protege tu llave privada contra accesos no autorizados si te la roban o copian.${C_RESET}"
+            SSH_PASSPHRASE=""
+            while true; do
+                read -s -r -p "Escribe una frase de paso para proteger tu llave SSH (o Enter para omitir): " PASS_SSH1
+                echo ""
+                if [ -z "$PASS_SSH1" ]; then
+                    read -r -p "¿Deseas dejar la llave SSH SIN frase de paso? [s/N]: " CONFIRM_NOPASS
+                    CONFIRM_NOPASS="${CONFIRM_NOPASS:-N}"
+                    if [[ "$CONFIRM_NOPASS" =~ ^[Ss]$ ]]; then
+                        SSH_PASSPHRASE=""
+                        log_info "Generando llave SSH sin frase de paso."
+                        break
+                    else
+                        continue
+                    fi
+                fi
+                read -s -r -p "Confirma la frase de paso: " PASS_SSH2
+                echo ""
+                if [ "$PASS_SSH1" != "$PASS_SSH2" ]; then
+                    log_error "Las frases de paso no coinciden. Inténtalo de nuevo."
+                    continue
+                fi
+                SSH_PASSPHRASE="$PASS_SSH1"
+                log_ok "Frase de paso asignada a la llave SSH."
+                break
+            done
+
             TEMP_KEY="/tmp/se2code_ed25519_$$"
-            ssh-keygen -t ed25519 -N "" -C "${ADMIN_USER}@$(hostname)" -f "$TEMP_KEY" >/dev/null 2>&1
+            ssh-keygen -t ed25519 -N "$SSH_PASSPHRASE" -C "${ADMIN_USER}@$(hostname)" -f "$TEMP_KEY" >/dev/null 2>&1
             cat "${TEMP_KEY}.pub" >> "$USER_HOME/.ssh/authorized_keys"
 
             echo -e "\n${C_BOLD}${C_YELLOW}╔════════════════════════════════════════════════════════════════════════╗${C_RESET}"
             echo -e "${C_BOLD}${C_YELLOW}║         ⚠️  COPIA Y GUARDA TU CLAVE PRIVADA EN TU COMPUTADORA          ║${C_RESET}"
             echo -e "${C_BOLD}${C_YELLOW}╚════════════════════════════════════════════════════════════════════════╝${C_RESET}"
-            echo -e "${C_CYAN}Copia TODO el bloque inferior y guárdalo en tu Mac/PC (ej: server.pem o id_ed25519):${C_RESET}\n"
+            echo -e "${C_CYAN}Copia TODO el bloque inferior (incluyendo la línea final -----END...) y guárdalo en tu Mac/PC:${C_RESET}\n"
             echo -e "${C_GREEN}"
             cat "$TEMP_KEY"
+            echo "" # Asegura el salto de línea final obligatorio para OpenSSH
             echo -e "${C_RESET}"
+            if [ -n "$SSH_PASSPHRASE" ]; then
+                echo -e "  ${C_BOLD}Frase de paso:${C_RESET} ${C_GREEN}Llave protegida y encriptada con tu frase de paso.${C_RESET}"
+            fi
             echo -e "${C_YELLOW}Recuerda aplicar permisos 400 en tu computadora local:${C_RESET}"
             echo -e "${C_BOLD}chmod 400 <ruta-de-tu-archivo-guardado>${C_RESET}\n"
 
@@ -212,10 +244,10 @@ CHOSEN_SSH_PORT=""
 while true; do
     echo -e "\n${C_BOLD}${C_CYAN}--- Configuración de Puerto SSH ---${C_RESET}"
     echo -e "  - Rango recomendado: ${C_GREEN}1024 a 65535${C_RESET} (Puertos no privilegiados / privados)"
-    echo -e "  - Ejemplos populares: 2222, 6266, 8022, 22022"
-    echo -e "  - Puerto sugerido por defecto: ${C_BOLD}${C_CYAN}6266${C_RESET}"
-    read -r -p "¿Qué puerto SSH deseas utilizar en este servidor? [Enter para 6266]: " INPUT_SSH_PORT
-    INPUT_SSH_PORT="${INPUT_SSH_PORT:-6266}"
+    echo -e "  - Ejemplos populares: 2222, 4922, 8022, 22022"
+    echo -e "  - Puerto sugerido por defecto: ${C_BOLD}${C_CYAN}2222${C_RESET}"
+    read -r -p "¿Qué puerto SSH deseas utilizar en este servidor? [Enter para 2222]: " INPUT_SSH_PORT
+    INPUT_SSH_PORT="${INPUT_SSH_PORT:-2222}"
 
     if ! [[ "$INPUT_SSH_PORT" =~ ^[0-9]+$ ]]; then
         log_error "El puerto debe ser un valor numérico entero."
@@ -348,8 +380,8 @@ echo -e "\n${C_CYAN}¿Deseas autorizar un puerto UDP para WireGuard VPN en el Fi
 read -r -p "[S/n]: " OPEN_WG
 OPEN_WG="${OPEN_WG:-S}"
 if [[ "$OPEN_WG" =~ ^[Ss]$ ]]; then
-    read -r -p "Puerto UDP de WireGuard (Rango: 1024-65535) [Por defecto: 62420]: " WG_PORT
-    WG_PORT="${WG_PORT:-62420}"
+    read -r -p "Puerto UDP de WireGuard (Rango: 1024-65535) [Por defecto: 51820]: " WG_PORT
+    WG_PORT="${WG_PORT:-51820}"
     ufw allow "${WG_PORT}/udp" comment "se2Code WireGuard VPN" >/dev/null 2>&1
     log_ok "Puerto WireGuard ${WG_PORT}/udp añadido a UFW."
 fi

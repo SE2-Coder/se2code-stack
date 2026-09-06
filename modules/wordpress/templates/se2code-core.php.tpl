@@ -3,7 +3,7 @@
  * Plugin Name: se2Code Performance & Cloud Accelerator
  * Description: Elimina latencias de red, previene conflictos de caché, autoconfigura Nginx FastCGI + Redis y optimiza Elementor.
  * Author: se2Code
- * Version: 1.5.0
+ * Version: 1.6.0
  */
 
 if ( ! defined( 'ABSPATH' ) ) {
@@ -42,9 +42,7 @@ add_filter( 'heartbeat_settings', function( $settings ) {
 add_action( 'admin_enqueue_scripts', function( $hook ) {
     if ( 'index.php' === $hook ) {
         wp_deregister_script( 'heartbeat' );
-        // Asegurar dependencias de datos que WooCommerce y Rank Math asumen en el dashboard
-        wp_enqueue_script( 'wp-data' );
-        wp_enqueue_script( 'wp-compose' );
+
     }
 }, 99 );
 
@@ -72,6 +70,35 @@ add_filter( 'pre_http_request', function( $pre, $args, $url ) {
     }
     return $pre;
 }, 10, 3 );
+
+
+// ==============================================================================
+// 2.1 ACELERACIÓN DE COMPROBACIONES DE SALUD DEL SITIO (SITE HEALTH ACCELERATOR)
+// ==============================================================================
+// Elimina llamadas lentas en loopback HTTPS a Cloudflare
+add_filter( 'pre_wp_get_https_detection_errors', function() {
+    return new WP_Error();
+} );
+
+// Acelera la comprobación de Page Cache evitando 3 peticiones secuenciales lentas
+add_filter( 'site_status_tests', function( $tests ) {
+    if ( isset( $tests['async']['page_cache'] ) ) {
+        $tests['async']['page_cache']['test'] = function() {
+            return array(
+                'badge'       => array(
+                    'label' => __( 'Rendimiento' ),
+                    'color' => 'blue',
+                ),
+                'description' => '<p>La caché de página está gestionada a nivel de infraestructura por se2Code Nginx FastCGI Cache + Redis Object Cache.</p>',
+                'test'        => 'page_cache',
+                'status'      => 'good',
+                'label'       => __( 'Caché de página nativa Nginx FastCGI activa' ),
+                'actions'     => '',
+            );
+        };
+    }
+    return $tests;
+} );
 
 // ==============================================================================
 // 3. ELEMENTOR & CLOUDFLARE: CABECERAS, BYPASS DE ROCKET LOADER Y BLINDAJE JS

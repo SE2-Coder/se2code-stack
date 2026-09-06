@@ -95,6 +95,18 @@ function se2code_inject_elementor_safeguards() {
                 home_url: window.location.origin,
                 version: "3.35.5"
             };
+            window.elementor = window.elementor || {};
+            if ( ! window.elementor.hooks ) {
+                var _noop = function() {};
+                window.elementor.hooks = {
+                    addAction: _noop,
+                    addFilter: function(t, v) { return v; },
+                    doAction: _noop,
+                    applyFilters: function(t, v) { return v; },
+                    removeAction: _noop,
+                    removeFilter: _noop
+                };
+            }
             window.elementorV2 = window.elementorV2 || {};
             window.elementorV2.editorCurrentUser = window.elementorV2.editorCurrentUser || {
                 useCurrentUserCapabilities: function() { return { isAdmin: true, canUser: function() { return true; }, capabilities: ["manage_options"] }; },

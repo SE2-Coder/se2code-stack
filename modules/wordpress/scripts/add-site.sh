@@ -213,6 +213,9 @@ define( 'WP_REDIS_HOST', 'redis' );
 define( 'WP_REDIS_PORT', 6379 );
 define( 'WP_REDIS_PREFIX', '${REDIS_SUBPREFIX}' );
 
+// Nginx FastCGI Cache Helper
+define( 'RT_WP_NGINX_HELPER_CACHE_PATH', '/var/cache/nginx' );
+
 if ( ! defined( 'ABSPATH' ) ) {
     define( 'ABSPATH', __DIR__ . '/' );
 }

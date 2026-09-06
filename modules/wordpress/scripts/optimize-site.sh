@@ -131,7 +131,10 @@ if [ -f "$WP_CONFIG" ]; then
         sed -i "/table_prefix/i define( 'WP_REDIS_TIMEOUT', 1 );" "$WP_CONFIG"
         sed -i "/table_prefix/i define( 'WP_REDIS_READ_TIMEOUT', 1 );" "$WP_CONFIG"
     fi
-    log_ok "Parámetros de Redis y WP-Cron verificados en wp-config.php."
+        if ! grep -q "RT_WP_NGINX_HELPER_CACHE_PATH" "$WP_CONFIG"; then
+        sed -i "/table_prefix/i define( 'RT_WP_NGINX_HELPER_CACHE_PATH', '/var/cache/nginx' );" "$WP_CONFIG"
+    fi
+    log_ok "Parámetros de Redis, Nginx Helper y WP-Cron verificados en wp-config.php."
 fi
 
 # 3. Instalación y Activación de Redis Object Cache
@@ -156,7 +159,7 @@ log_step "Aplicando configuración óptima de FastCGI Purge..."
 NGINX_HELPER_CONFIG='{
     "enable_purge": "1",
     "cache_method": "enable_fastcgi",
-    "purge_method": "get_request",
+    "purge_method": "unlink_files",
     "enable_map": 0,
     "enable_log": 0,
     "log_level": "INFO",
@@ -176,6 +179,10 @@ NGINX_HELPER_CONFIG='{
 }'
 docker exec --user 33:33 "$PHP_CONTAINER" wp option update rt_wp_nginx_helper_options "$NGINX_HELPER_CONFIG" --format=json --path="$CONTAINER_PATH" >/dev/null 2>&1 || true
 log_ok "Nginx Helper configurado con reglas automáticas de purga FastCGI."
+log_step "Asignando permisos y capacidades completas de Nginx Helper al rol de Administrador..."
+docker exec --user 33:33 "$PHP_CONTAINER" wp cap add administrator 'Nginx Helper | Purge cache' --path="$CONTAINER_PATH" >/dev/null 2>&1 || true
+docker exec --user 33:33 "$PHP_CONTAINER" wp cap add administrator 'Nginx Helper | Config' --path="$CONTAINER_PATH" >/dev/null 2>&1 || true
+log_ok "Capacidades de purga Nginx Helper asignadas al Administrador." 
 
 # 5. Instalar Acelerador y Blindaje se2Code en mu-plugins
 log_section "PASO 5: INSTALANDO ACELERADOR Y BLINDAJE SE2CODE"
@@ -194,7 +201,12 @@ find "$SITE_WEB_DIR" -type f -exec chmod 644 {} + 2>/dev/null || true
 [ -f "$WP_CONFIG" ] && chmod 600 "$WP_CONFIG"
 log_ok "Permisos establecidos: directorios 755, archivos 644, wp-config 600 (usuario www-data)."
 
-# 7. Purga de Caché de Validación y Reinicio de PHP
+# 7. Purga de Caché de Validación, Transients y Reinicio de PHP
+log_step "Purgando transients expirados y regenerando estilos de Elementor..."
+docker exec --user 33:33 "$PHP_CONTAINER" wp transient delete --all --path="$CONTAINER_PATH" >/dev/null 2>&1 || true
+docker exec --user 33:33 "$PHP_CONTAINER" wp elementor flush_css --path="$CONTAINER_PATH" >/dev/null 2>&1 || true
+docker exec --user 33:33 "$PHP_CONTAINER" wp cache flush --path="$CONTAINER_PATH" >/dev/null 2>&1 || true
+docker exec redis redis-cli FLUSHALL >/dev/null 2>&1 || true
 docker exec wp-nginx rm -rf /var/cache/nginx/* 2>/dev/null || true
 docker restart "$PHP_CONTAINER" >/dev/null 2>&1 || true
 docker exec wp-nginx nginx -s reload 2>/dev/null || true

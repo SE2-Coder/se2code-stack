@@ -289,6 +289,9 @@ define( 'WP_REDIS_PREFIX', '${SITE_SLUG}_' );
 define( 'WP_REDIS_TIMEOUT', 1 );
 define( 'WP_REDIS_READ_TIMEOUT', 1 );
 
+// Nginx FastCGI Cache Helper
+define( 'RT_WP_NGINX_HELPER_CACHE_PATH', '/var/cache/nginx' );
+
 if ( ! defined( 'ABSPATH' ) ) {
     define( 'ABSPATH', __DIR__ . '/' );
 }
@@ -297,24 +300,37 @@ WPCONF
 
 log_ok "wp-config.php generado limpiamente y conectado a MariaDB (prefijo '${TABLE_PREFIX}')."
 
-# 12. Purgar Drop-ins Incompatibles y Desplegar Acelerador se2Code
-log_section "LIMPIEZA DE DROP-INS Y PROTECCIÓN PREVENTIVA"
+# 12. Purgar Drop-ins Incompatibles, Pre-instalar Plugins de Infraestructura y Desplegar se2Code Core
+log_section "CONFIGURANDO PLUGINS DE INFRAESTRUCTURA Y BLINDAJE SE2CODE"
 rm -f "$SITE_WEB_DIR/wp-content/advanced-cache.php"
 rm -f "$SITE_WEB_DIR/wp-content/wp-cache-config.php"
 rm -f "$SITE_WEB_DIR/wp-content/db.php"
 rm -rf "$SITE_WEB_DIR/wp-content/cache" 2>/dev/null || true
 
-# Configurar object-cache.php de Redis si el plugin existe
+mkdir -p "$SITE_WEB_DIR/wp-content/plugins"
+if [ ! -d "$SITE_WEB_DIR/wp-content/plugins/redis-cache" ]; then
+    log_info "Pre-instalando plugin obligatorio redis-cache..."
+    curl -sSL https://downloads.wordpress.org/plugin/redis-cache.latest-stable.zip -o /tmp/redis-cache.zip 2>/dev/null && \
+    unzip -q -o /tmp/redis-cache.zip -d "$SITE_WEB_DIR/wp-content/plugins/" 2>/dev/null && \
+    rm -f /tmp/redis-cache.zip || true
+fi
+
+# Configurar drop-in de Redis
 if [ -f "$SITE_WEB_DIR/wp-content/plugins/redis-cache/includes/object-cache.php" ]; then
     cp "$SITE_WEB_DIR/wp-content/plugins/redis-cache/includes/object-cache.php" "$SITE_WEB_DIR/wp-content/object-cache.php" 2>/dev/null || true
-else
-    rm -f "$SITE_WEB_DIR/wp-content/object-cache.php"
+fi
+
+if [ ! -d "$SITE_WEB_DIR/wp-content/plugins/nginx-helper" ]; then
+    log_info "Pre-instalando plugin obligatorio nginx-helper..."
+    curl -sSL https://downloads.wordpress.org/plugin/nginx-helper.latest-stable.zip -o /tmp/nginx-helper.zip 2>/dev/null && \
+    unzip -q -o /tmp/nginx-helper.zip -d "$SITE_WEB_DIR/wp-content/plugins/" 2>/dev/null && \
+    rm -f /tmp/nginx-helper.zip || true
 fi
 
 mkdir -p "$SITE_WEB_DIR/wp-content/mu-plugins"
 cp "$STACK_ROOT/templates/se2code-core.php.tpl" "$SITE_WEB_DIR/wp-content/mu-plugins/se2code-core.php" 2>/dev/null || true
 chmod 644 "$SITE_WEB_DIR/wp-content/mu-plugins/se2code-core.php" 2>/dev/null || true
-log_ok "Drop-ins antiguos purgados y se2code-core.php desplegado en mu-plugins."
+log_ok "Plugins de infraestructura y se2code-core.php listos en el sitio."
 
 # 13. Permisos del Sistema de Archivos y Activación de Servicios
 log_section "AJUSTANDO PERMISOS Y ACTIVANDO SERVICIOS"

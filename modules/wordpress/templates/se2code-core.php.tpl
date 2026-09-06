@@ -3,24 +3,52 @@
  * Plugin Name: se2Code Performance & Cloud Accelerator
  * Description: Elimina latencias de red, previene conflictos de caché, autoconfigura Nginx FastCGI + Redis y optimiza Elementor.
  * Author: se2Code
- * Version: 1.2.0
+ * Version: 1.3.0
  */
 
 if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
+// Ruta por defecto para purga en disco de Nginx FastCGI Cache
+if ( ! defined( 'RT_WP_NGINX_HELPER_CACHE_PATH' ) ) {
+    define( 'RT_WP_NGINX_HELPER_CACHE_PATH', '/var/cache/nginx' );
+}
+
 // ==============================================================================
-// 1. RED: FORZAR IPv4 EN cURL (Previene cuelgues de 20s en VPS con IPv6 inactiva)
+// 1. RED Y RENDIMIENTO: FORZAR IPv4 EN cURL Y LIMITAR TIMEOUTS DE RED
 // ==============================================================================
 add_action( 'http_api_curl', function( $handle ) {
     curl_setopt( $handle, CURLOPT_IPRESOLVE, CURL_IPRESOLVE_V4 );
-    curl_setopt( $handle, CURLOPT_CONNECTTIMEOUT, 5 );
-    curl_setopt( $handle, CURLOPT_TIMEOUT, 10 );
+    curl_setopt( $handle, CURLOPT_CONNECTTIMEOUT, 3 );
+    curl_setopt( $handle, CURLOPT_TIMEOUT, 6 );
+} );
+
+add_filter( 'http_request_args', function( $args ) {
+    $args['timeout'] = min( 6, (int) ( $args['timeout'] ?? 6 ) );
+    return $args;
 } );
 
 // ==============================================================================
-// 2. ELEMENTOR & CLOUDFLARE: CABECERAS Y BYPASS DE ROCKET LOADER
+// 2. FLUIDEZ DEL BACKEND Y CONTROL DE HEARTBEAT
+// ==============================================================================
+// Reducir la frecuencia de Heartbeat a 60s en el panel de administración
+add_filter( 'heartbeat_settings', function( $settings ) {
+    $settings['interval'] = 60;
+    return $settings;
+} );
+
+// Desactivar llamadas externas lentas de telemetria / promociones de plugins en el admin
+add_filter( 'pre_http_request', function( $pre, $args, $url ) {
+    if ( strpos( $url, 'elementor.com/api/v1/tracker' ) !== false ||
+         strpos( $url, 'api.elementor.com/v1/announcements' ) !== false ) {
+        return new WP_Error( 'http_request_failed', 'Disabled by se2Code' );
+    }
+    return $pre;
+}, 10, 3 );
+
+// ==============================================================================
+// 3. ELEMENTOR & CLOUDFLARE: CABECERAS Y BYPASS DE ROCKET LOADER
 // ==============================================================================
 add_action( 'send_headers', function() {
     if ( is_admin() || isset( $_GET['elementor-preview'] ) || ( isset( $_GET['action'] ) && 'elementor' === $_GET['action'] ) ) {
@@ -72,7 +100,32 @@ add_filter( 'script_loader_src', function( $src, $handle ) {
 add_filter( 'elementor/tracker/send_tracking_data_params', '__return_empty_array' );
 
 // ==============================================================================
-// 3. DETECTOR DE PLUGINS DE CACHÉ EN CONFLICTO (MIGRACIONES / POST-INSTALL)
+// 4. PERMISOS Y CAPACIDADES DE NGINX HELPER (Soluciona "No estás autorizado")
+// ==============================================================================
+add_filter( 'user_has_cap', function( $allcaps, $caps, $args, $user ) {
+    if ( ! empty( $allcaps['manage_options'] ) || ! empty( $allcaps['administrator'] ) ) {
+        $allcaps['Nginx Helper | Purge cache'] = true;
+        $allcaps['Nginx Helper | Config'] = true;
+    }
+    return $allcaps;
+}, 10, 4 );
+
+add_action( 'admin_init', function() {
+    if ( current_user_can( 'manage_options' ) ) {
+        $role = get_role( 'administrator' );
+        if ( $role ) {
+            if ( ! $role->has_cap( 'Nginx Helper | Purge cache' ) ) {
+                $role->add_cap( 'Nginx Helper | Purge cache' );
+            }
+            if ( ! $role->has_cap( 'Nginx Helper | Config' ) ) {
+                $role->add_cap( 'Nginx Helper | Config' );
+            }
+        }
+    }
+} );
+
+// ==============================================================================
+// 5. DETECTOR DE PLUGINS DE CACHÉ EN CONFLICTO (MIGRACIONES / POST-INSTALL)
 // ==============================================================================
 add_action( 'admin_notices', function() {
     if ( ! current_user_can( 'activate_plugins' ) ) {
@@ -122,7 +175,7 @@ add_action( 'admin_notices', function() {
 } );
 
 // ==============================================================================
-// 4. AVISO INFORMATIVO DE ACELERACIÓN EN EL DASHBOARD (Dismissible)
+// 6. AVISO INFORMATIVO DE ACELERACIÓN EN EL DASHBOARD (Dismissible)
 // ==============================================================================
 add_action( 'admin_notices', function() {
     $screen = get_current_screen();
@@ -155,20 +208,20 @@ add_action( 'wp_ajax_se2code_dismiss_cache_notice', function() {
 } );
 
 // ==============================================================================
-// 5. AUTOCONFIGURACIÓN ÓPTIMA DE NGINX HELPER Y REDIS CACHE
+// 7. AUTOCONFIGURACIÓN ÓPTIMA DE NGINX HELPER Y REDIS CACHE
 // ==============================================================================
 add_action( 'init', function() {
     if ( ! is_admin() || ! current_user_can( 'manage_options' ) ) {
         return;
     }
 
-    // A. Autoconfigurar Nginx Helper con la configuración óptima FastCGI si no tiene opciones
+    // A. Autoconfigurar Nginx Helper con purga directa en disco (unlink_files)
     $nginx_options = get_option( 'rt_wp_nginx_helper_options' );
-    if ( ! $nginx_options || empty( $nginx_options['enable_purge'] ) ) {
+    if ( ! $nginx_options || empty( $nginx_options['enable_purge'] ) || ( isset( $nginx_options['purge_method'] ) && 'get_request' === $nginx_options['purge_method'] ) ) {
         update_option( 'rt_wp_nginx_helper_options', [
             'enable_purge'                     => '1',
             'cache_method'                     => 'enable_fastcgi',
-            'purge_method'                     => 'get_request',
+            'purge_method'                     => 'unlink_files',
             'enable_map'                       => 0,
             'enable_log'                       => 0,
             'log_level'                        => 'INFO',

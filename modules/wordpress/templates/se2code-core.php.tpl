@@ -57,21 +57,6 @@ add_action( 'send_headers', function() {
     }
 } );
 
-// Inyectar data-cfasync="false" en todos los scripts del editor y previsualización de Elementor
-add_action( 'template_redirect', 'se2code_shield_elementor_cfasync', -9999 );
-add_action( 'admin_init', 'se2code_shield_elementor_cfasync', -9999 );
-
-function se2code_shield_elementor_cfasync() {
-    if ( ( isset( $_GET['action'] ) && 'elementor' === $_GET['action'] ) || isset( $_GET['elementor-preview'] ) ) {
-        ob_start( function( $buffer ) {
-            if ( false !== strpos( $buffer, '<script' ) ) {
-                $buffer = preg_replace( '/<script\b(?![^>]*data-cfasync)/i', '<script data-cfasync="false"', $buffer );
-            }
-            return $buffer;
-        } );
-    }
-}
-
 add_filter( 'script_loader_tag', function( $tag, $handle ) {
     if ( is_admin() || ( isset( $_GET['action'] ) && 'elementor' === $_GET['action'] ) ) {
         if ( strpos( $tag, 'data-cfasync' ) === false ) {

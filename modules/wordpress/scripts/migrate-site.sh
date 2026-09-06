@@ -347,42 +347,82 @@ docker restart "$PHP_CONTAINER" >/dev/null 2>&1 || true
 docker exec wp-nginx nginx -t >/dev/null 2>&1 && docker exec wp-nginx nginx -s reload 2>/dev/null || docker restart wp-nginx >/dev/null 2>&1 || true
 log_ok "NGINX recargado y motor PHP activado con el nuevo pool."
 
-# 14. Cambio de Dominio / Staging (wp search-replace)
-log_section "CAMBIO DE DOMINIO / STAGING (SEARCH & REPLACE)"
+# 14. Cambio de Dominio / Staging (Reemplazo Canónico Multivariante)
+log_section "CAMBIO DE DOMINIO / STAGING (REEMPLAZO CANÓNICO MULTIVARIANTE)"
 
-echo -e "¿Deseas ejecutar un reemplazo de URL en la base de datos (${C_YELLOW}wp search-replace${C_RESET})?"
-echo -e "  (Indispensable si vienes de otro dominio o estás creando un entorno de ${C_BOLD}Staging / Dev${C_RESET})"
-read -r -p "¿Ejecutar reemplazo de dominio? [S/n]: " DO_REPLACE
+echo -e "¿Deseas ejecutar un reemplazo canónico de URLs en la base de datos (${C_YELLOW}wp search-replace${C_RESET})?"
+echo -e "  ${C_DIM}(Sustituye automáticamente las 4 variantes: https/http y con/sin www hacia una sola URL destino)${C_RESET}"
+read -r -p "¿Ejecutar reemplazo canónico de dominio? [S/n]: " DO_REPLACE
 DO_REPLACE=${DO_REPLACE:-S}
 
 if [[ "$DO_REPLACE" =~ ^[Ss]$ ]]; then
     # Detectar el dominio previo directamente desde wp_options con MariaDB en modo silencioso
-    OLD_SITEURL=$(docker exec mariadb mariadb -u root -p"$MARIADB_ROOT_PASS" --skip-ssl -N -s -e "SELECT option_value FROM \`${DB_NAME}\`.${TABLE_PREFIX}options WHERE option_name IN ('siteurl', 'home') AND option_value != '' LIMIT 1;" 2>/dev/null | tr -d '[:space:]' || true)
+    OLD_SITEURL=$(docker exec mariadb mariadb -u root -p"$MARIADB_ROOT_PASS" --skip-ssl -N -s -e "SELECT option_value FROM `\${DB_NAME}`.\${TABLE_PREFIX}options WHERE option_name IN ('siteurl', 'home') AND option_value != '' LIMIT 1;" 2>/dev/null | tr -d '[:space:]' || true)
     
     echo -e "\nDominio previo detectado en la BD: ${C_YELLOW}${OLD_SITEURL:-'No detectado'}${C_RESET}"
-    read -r -p "Escribe la URL vieja a buscar [ej: ${OLD_SITEURL:-https://viejo-dominio.com}]: " SEARCH_URL
+    read -r -p "Escribe el dominio viejo a buscar [ej: ${OLD_SITEURL:-https://viejo-dominio.com}]: " SEARCH_URL
     SEARCH_URL=${SEARCH_URL:-$OLD_SITEURL}
     
     DEST_DEFAULT="https://${DOMAIN}"
-    read -r -p "Escribe la URL nueva de reemplazo [por defecto: $DEST_DEFAULT]: " REPLACE_URL
+    echo -e "\nURL canónica final de destino (${C_BOLD}la ÚNICA URL que reemplazará a todas las variantes${C_RESET}):"
+    read -r -p "Escribe la URL nueva [por defecto: $DEST_DEFAULT]: " REPLACE_URL
     REPLACE_URL=${REPLACE_URL:-$DEST_DEFAULT}
 
-    if [ -n "$SEARCH_URL" ] && [ -n "$REPLACE_URL" ] && [ "$SEARCH_URL" != "$REPLACE_URL" ]; then
-        log_step "Ejecutando: wp search-replace '$SEARCH_URL' '$REPLACE_URL' --all-tables --precise..."
-        docker exec --user 33:33 "$PHP_CONTAINER" wp search-replace "$SEARCH_URL" "$REPLACE_URL" --all-tables --precise --skip-columns=guid --path="$CONTAINER_PATH" || true
+    if [ -n "$SEARCH_URL" ] && [ -n "$REPLACE_URL" ]; then
+        # Normalizar cadenas
+        CLEAN_SEARCH=$(echo "$SEARCH_URL" | sed -e 's|^https\?://||' -e 's|/*$||')
+        ROOT_SEARCH=$(echo "$CLEAN_SEARCH" | sed 's|^www\.||')
 
-        # Reemplazar versión sin https si aplica
-        SEARCH_HTTP=$(echo "$SEARCH_URL" | sed 's|^https://|http://|')
-        REPLACE_HTTP=$(echo "$REPLACE_URL" | sed 's|^https://|https://|')
-        if [ "$SEARCH_HTTP" != "$SEARCH_URL" ]; then
-            docker exec -i --user 33:33 "$PHP_CONTAINER" wp search-replace "$SEARCH_HTTP" "$REPLACE_HTTP" --all-tables --precise --skip-columns=guid --path="$CONTAINER_PATH" >/dev/null 2>&1 || true
+        CANONICAL_DEST=$(echo "$REPLACE_URL" | sed -e 's|/*$||')
+        if [[ ! "$CANONICAL_DEST" =~ ^https?:// ]]; then
+            CANONICAL_DEST="https://${CANONICAL_DEST}"
+        fi
+        CLEAN_DEST_NO_PROTO=$(echo "$CANONICAL_DEST" | sed -e 's|^https\?://||')
+
+        # Matriz de 4 variantes en orden de mayor longitud (www primero para evitar prefijos huérfanos)
+        SEARCH_VARIANTS=(
+            "https://www.${ROOT_SEARCH}"
+            "http://www.${ROOT_SEARCH}"
+            "https://${ROOT_SEARCH}"
+            "http://${ROOT_SEARCH}"
+        )
+        REL_VARIANTS=(
+            "//www.${ROOT_SEARCH}"
+            "//${ROOT_SEARCH}"
+        )
+
+        log_step "Ejecutando matriz de reemplazo canónico hacia '$CANONICAL_DEST'..."
+        for v in "${SEARCH_VARIANTS[@]}"; do
+            if [ "$v" != "$CANONICAL_DEST" ]; then
+                log_info "Reemplazando en BD: '$v' ➔ '$CANONICAL_DEST'..."
+                docker exec --user 33:33 "$PHP_CONTAINER" wp search-replace "$v" "$CANONICAL_DEST" \
+                    --all-tables --precise --skip-columns=guid --path="$CONTAINER_PATH" || true
+            fi
+        done
+
+        # Reemplazar URLs de protocolo relativo
+        for rv in "${REL_VARIANTS[@]}"; do
+            if [ "$rv" != "//$CLEAN_DEST_NO_PROTO" ]; then
+                docker exec -i --user 33:33 "$PHP_CONTAINER" wp search-replace "$rv" "//$CLEAN_DEST_NO_PROTO" \
+                    --all-tables --precise --skip-columns=guid --path="$CONTAINER_PATH" >/dev/null 2>&1 || true
+            fi
+        done
+
+        # Sincronizar Elementor si está activo
+        if docker exec --user 33:33 "$PHP_CONTAINER" wp plugin is-active elementor --path="$CONTAINER_PATH" >/dev/null 2>&1; then
+            log_step "Sincronizando biblioteca de Elementor..."
+            for v in "${SEARCH_VARIANTS[@]}"; do
+                if [ "$v" != "$CANONICAL_DEST" ]; then
+                    docker exec -i --user 33:33 "$PHP_CONTAINER" wp elementor replace-urls "$v" "$CANONICAL_DEST" --path="$CONTAINER_PATH" >/dev/null 2>&1 || true
+                fi
+            done
+            docker exec -i --user 33:33 "$PHP_CONTAINER" wp elementor flush_css --path="$CONTAINER_PATH" >/dev/null 2>&1 || true
         fi
 
-        # Flush Elementor CSS & cache para que la página cargue con todos sus estilos
-        docker exec -i --user 33:33 "$PHP_CONTAINER" wp elementor flush_css --path="$CONTAINER_PATH" >/dev/null 2>&1 || true
+        docker exec -i --user 33:33 "$PHP_CONTAINER" wp rewrite flush --path="$CONTAINER_PATH" >/dev/null 2>&1 || true
         docker exec -i --user 33:33 "$PHP_CONTAINER" wp cache flush --path="$CONTAINER_PATH" >/dev/null 2>&1 || true
         docker exec -i redis redis-cli FLUSHALL >/dev/null 2>&1 || true
-        log_ok "Reemplazo de URLs completado y estilos regenerados con éxito."
+        log_ok "Matriz de reemplazo completada y estilos regenerados con éxito hacia '$CANONICAL_DEST'."
     else
         log_info "No hubo cambios de URL."
     fi

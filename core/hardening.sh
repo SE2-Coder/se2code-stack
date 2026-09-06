@@ -10,9 +10,9 @@
 #   2. Creación de usuario administrador no-root con contraseña sudo
 #   3. Gestión de llaves SSH (Pegar / Generar en servidor / Importar de root)
 #   4. Selección dinámica de puerto SSH con rangos y validación
-#   5. Hardening de SSH, socket systemd y neutralización de cloud-init
+#   5. Hardening de SSH, desactivación de ssh.socket y neutralización cloud-init
 #   6. Configuración de Firewall UFW (Nativo, sin conflictos)
-#   7. Protección de fuerza bruta con Fail2ban (Systemd + nftables)
+#   7. Protección de fuerza bruta con Fail2ban (Systemd + nftables + whitelist IP)
 #   8. Hardening del Kernel (sysctl), Modprobe y permisos estrictos
 #   9. Verificación en vivo del socket y salvaguarda Anti-Bloqueo
 # ==============================================================================
@@ -32,6 +32,14 @@ fi
 
 show_banner 2>/dev/null || true
 log_section "MÓDULO DE HARDENING Y SECURIZACIÓN PROFUNDA DEL SERVIDOR"
+
+# Detectar IP del cliente SSH actual para agregarla a la lista blanca de Fail2ban
+CURRENT_ADMIN_IP=""
+if [ -n "${SSH_CLIENT:-}" ]; then
+    CURRENT_ADMIN_IP=$(echo "$SSH_CLIENT" | awk '{print $1}')
+elif [ -n "${SSH_CONNECTION:-}" ]; then
+    CURRENT_ADMIN_IP=$(echo "$SSH_CONNECTION" | awk '{print $1}')
+fi
 
 # ------------------------------------------------------------------------------
 # 1. Verificación de Sistema Operativo y Paquetes Base
@@ -219,19 +227,6 @@ while true; do
         continue
     fi
 
-    # Verificar si está ocupado por otro servicio diferente a SSH
-    if command -v ss >/dev/null 2>&1; then
-        if ss -tln | grep -q ":${INPUT_SSH_PORT} "; then
-            CURRENT_SSH=$(ss -tlnp 2>/dev/null | grep ":${INPUT_SSH_PORT} " || true)
-            if echo "$CURRENT_SSH" | grep -q "sshd"; then
-                log_info "El puerto $INPUT_SSH_PORT ya está siendo usado por el demonio SSH actual."
-            else
-                log_error "El puerto $INPUT_SSH_PORT/tcp ya está ocupado por otro servicio en el servidor."
-                continue
-            fi
-        fi
-    fi
-
     CHOSEN_SSH_PORT="$INPUT_SSH_PORT"
     log_ok "Puerto SSH seleccionado: ${C_BOLD}${CHOSEN_SSH_PORT}/tcp${C_RESET}"
     break
@@ -244,9 +239,11 @@ log_step "Paso 5/9: Aplicando Hardening a OpenSSH y resolviendo sockets de Debia
 
 # 5.1 Configuración de sshd_config principal
 if [ -f /etc/ssh/sshd_config ]; then
-    # Comentar o actualizar directivas Port previas
+    # Actualizar directiva Port en sshd_config si existe
     if grep -q "^Port " /etc/ssh/sshd_config; then
         sed -i "s/^Port .*/Port ${CHOSEN_SSH_PORT}/" /etc/ssh/sshd_config
+    elif grep -q "^#Port " /etc/ssh/sshd_config; then
+        sed -i "s/^#Port .*/Port ${CHOSEN_SSH_PORT}/" /etc/ssh/sshd_config
     else
         echo "Port ${CHOSEN_SSH_PORT}" >> /etc/ssh/sshd_config
     fi
@@ -277,8 +274,12 @@ for cloud_file in /etc/ssh/sshd_config.d/50-cloud-init.conf /etc/ssh/sshd_config
 done
 
 # 5.4 CRÍTICO EN DEBIAN 12/13: Solucionar activación por socket systemd (ssh.socket)
-# En Debian 12, ssh.socket intercepta el puerto 22 e ignora sshd_config.
-# Desactivamos ssh.socket y forzamos el servicio standalone ssh.service, además de configurar el override.
+# Desactivamos completamente ssh.socket y forzamos el servicio standalone ssh.service
+systemctl stop ssh.socket 2>/dev/null || true
+systemctl disable --now ssh.socket 2>/dev/null || true
+systemctl mask ssh.socket 2>/dev/null || true
+
+# También configuramos el override del socket por compatibilidad absoluta
 mkdir -p /etc/systemd/system/ssh.socket.d
 cat > /etc/systemd/system/ssh.socket.d/listen.conf << SOCK_EOF
 [Socket]
@@ -286,12 +287,12 @@ ListenStream=
 ListenStream=${CHOSEN_SSH_PORT}
 SOCK_EOF
 
-systemctl stop ssh.socket 2>/dev/null || true
-systemctl disable ssh.socket 2>/dev/null || true
 systemctl daemon-reload
 
-# 5.5 Validación de sintaxis antes de reiniciar el demonio
+# 5.5 Validación de sintaxis y reinicio de ssh.service
 if sshd -t; then
+    systemctl unmask ssh.service 2>/dev/null || true
+    systemctl unmask ssh 2>/dev/null || true
     systemctl enable --now ssh.service 2>/dev/null || systemctl enable --now ssh 2>/dev/null || true
     systemctl restart ssh.service 2>/dev/null || systemctl restart ssh 2>/dev/null || true
     log_ok "Demonio SSH reiniciado y reconfigurado."
@@ -313,13 +314,14 @@ done
 if [ "$SSH_UP" = true ]; then
     log_ok "Servicio SSH activo y escuchando en el puerto ${CHOSEN_SSH_PORT}/tcp."
 else
-    log_warn "SSH no respondió inmediatamente en el puerto ${CHOSEN_SSH_PORT}. Reintentando arranque forzado..."
-    systemctl restart ssh 2>/dev/null || systemctl restart sshd 2>/dev/null || true
+    log_warn "SSH no respondió en el primer intento. Forzando arranque de sshd..."
+    /usr/sbin/sshd 2>/dev/null || systemctl restart ssh 2>/dev/null || true
     sleep 2
     if ss -tln | grep -q ":${CHOSEN_SSH_PORT} "; then
         log_ok "Servicio SSH arrancado con éxito en el puerto ${CHOSEN_SSH_PORT}/tcp."
     else
-        log_error "Alerta: No se detecta escucha en el puerto ${CHOSEN_SSH_PORT}/tcp. El puerto 22 se mantendrá abierto."
+        log_error "Alerta: No se detecta escucha en el puerto ${CHOSEN_SSH_PORT}/tcp."
+        log_warn "Manteniendo puerto 22 abierto en UFW como red de seguridad."
     fi
 fi
 
@@ -361,6 +363,13 @@ log_ok "Firewall UFW activado con políticas estrictas (deny incoming, allow out
 # ------------------------------------------------------------------------------
 log_step "Paso 7/9: Configurando Fail2ban para Debian 12/13..."
 
+# Construir lista blanca: localhost + WireGuard + IP del administrador actual
+IGNORE_LIST="127.0.0.1/8 ::1 10.13.13.0/24"
+if [ -n "$CURRENT_ADMIN_IP" ]; then
+    IGNORE_LIST="${IGNORE_LIST} ${CURRENT_ADMIN_IP}"
+    log_info "Tu IP actual (${CURRENT_ADMIN_IP}) ha sido agregada a la lista blanca de Fail2ban."
+fi
+
 mkdir -p /etc/fail2ban
 cat > /etc/fail2ban/jail.local << F2B_EOF
 # ==============================================================================
@@ -370,7 +379,7 @@ cat > /etc/fail2ban/jail.local << F2B_EOF
 bantime = 3600
 findtime = 600
 maxretry = 3
-ignoreip = 127.0.0.1/8 ::1 10.13.13.0/24
+ignoreip = ${IGNORE_LIST}
 backend = systemd
 banaction = nftables[type=multiport]
 banaction_allports = nftables[type=allports]
@@ -384,9 +393,12 @@ maxretry = 3
 bantime = 3600
 F2B_EOF
 
+# Desbanear cualquier IP previa para no bloquear las pruebas del usuario
 systemctl enable fail2ban >/dev/null 2>&1 || true
 systemctl restart fail2ban >/dev/null 2>&1 || true
 sleep 2
+
+fail2ban-client unban --all >/dev/null 2>&1 || true
 
 if fail2ban-client status sshd >/dev/null 2>&1; then
     log_ok "Fail2ban activo y protegiendo el jail 'sshd' en puerto ${CHOSEN_SSH_PORT}/tcp."
@@ -481,7 +493,7 @@ log_ok "Permisos de seguridad estrictos aplicados en archivos del sistema."
 # ------------------------------------------------------------------------------
 log_step "Paso 9/9: Salvaguarda de Conexión (Anti-Lockout)"
 
-SERVER_IP=$(curl -s4 --max-time 3 ifconfig.me || curl -s4 --max-time 3 icanhazip.com || ip route get 1.1.1.1 2>/dev/null | awk "{print \$7}" || echo "TU_IP_DEL_SERVIDOR")
+SERVER_IP=$(curl -s4 --max-time 3 ifconfig.me || curl -s4 --max-time 3 icanhazip.com || ip route get 1.1.1.1 2>/dev/null | awk '{print $7}' || echo "TU_IP_DEL_SERVIDOR")
 
 echo -e "\n${C_BOLD}${C_YELLOW}╔════════════════════════════════════════════════════════════════════════╗${C_RESET}"
 echo -e "${C_BOLD}${C_YELLOW}║         ⚠️  ATENCIÓN: PRUEBA DE CONEXIÓN EN TERMINAL NUEVA             ║${C_RESET}"

@@ -82,10 +82,15 @@ CONFLICTING_PLUGINS=(
     "hyper-cache"
     "autoptimize"
     "hide-my-wp"
+    "hide-my-wp-pack"
     "wps-hide-login"
     "wp-hide-security-enhancer"
     "rename-wp-login"
     "lockdown-wp-admin"
+    "easy-hide-login"
+    "custom-login-url"
+    "change-wp-admin-login"
+    "hc-custom-wp-admin-url"
 )
 
 DEACTIVATED_COUNT=0

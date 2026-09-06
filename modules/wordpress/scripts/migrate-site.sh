@@ -407,7 +407,7 @@ if [ "${NEED_ACME:-false}" = true ]; then
 fi
 
 # Desactivación preventiva de plugins de ofuscación de login o URLs que rompen migraciones
-for sec_plug in "hide-my-wp" "wps-hide-login" "wp-hide-security-enhancer" "rename-wp-login" "lockdown-wp-admin"; do
+for sec_plug in "hide-my-wp" "hide-my-wp-pack" "wps-hide-login" "wp-hide-security-enhancer" "rename-wp-login" "lockdown-wp-admin" "easy-hide-login" "custom-login-url" "change-wp-admin-login" "hc-custom-wp-admin-url"; do
     if docker exec --user 33:33 "$PHP_CONTAINER" wp plugin is-installed "$sec_plug" --path="$CONTAINER_PATH" >/dev/null 2>&1; then
         if docker exec --user 33:33 "$PHP_CONTAINER" wp plugin is-active "$sec_plug" --path="$CONTAINER_PATH" >/dev/null 2>&1; then
             log_warn "Plugin de ofuscación de login detectado: '$sec_plug'. Desactivando preventivamente para evitar bloqueos del panel y assets rotos..."
@@ -425,8 +425,11 @@ read -r -p "¿Ejecutar reemplazo canónico de dominio? [S/n]: " DO_REPLACE
 DO_REPLACE=${DO_REPLACE:-S}
 
 if [[ "$DO_REPLACE" =~ ^[Ss]$ ]]; then
-    # Detectar el dominio previo: Primero vía WP-CLI, y como fallback directo en MariaDB
-    OLD_SITEURL=$(docker exec --user 33:33 "$PHP_CONTAINER" wp option get siteurl --path="$CONTAINER_PATH" 2>/dev/null | tr -d '[:space:]' || true)
+    # Detectar el dominio previo directamente desde la tabla importada en MariaDB (ignora las constantes de wp-config.php)
+    OLD_SITEURL=$(docker exec mariadb mariadb -u "$DB_USER" -p"$DB_PASS" --skip-ssl -N -s -e "SELECT option_value FROM \`${DB_NAME}\`.${TABLE_PREFIX}options WHERE option_name = 'siteurl' AND option_value != '' LIMIT 1;" 2>/dev/null | tr -d '[:space:]' || true)
+    if [ -z "$OLD_SITEURL" ]; then
+        OLD_SITEURL=$(docker exec mariadb mariadb -u "$DB_USER" -p"$DB_PASS" --skip-ssl -N -s -e "SELECT option_value FROM \`${DB_NAME}\`.${TABLE_PREFIX}options WHERE option_name = 'home' AND option_value != '' LIMIT 1;" 2>/dev/null | tr -d '[:space:]' || true)
+    fi
     if [ -z "$OLD_SITEURL" ]; then
         OLD_SITEURL=$(docker exec mariadb mariadb -u root -p"$MARIADB_ROOT_PASS" --skip-ssl -N -s -e "SELECT option_value FROM \`${DB_NAME}\`.${TABLE_PREFIX}options WHERE option_name IN ('siteurl', 'home') AND option_value != '' LIMIT 1;" 2>/dev/null | tr -d '[:space:]' || true)
     fi

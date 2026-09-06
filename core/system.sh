@@ -51,6 +51,7 @@ install_system_dependencies() {
             gzip \
             openssl \
             procps \
+            cron \
             net-tools
     fi
     log_ok "Dependencias del sistema instaladas correctamente."

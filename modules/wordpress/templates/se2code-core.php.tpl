@@ -3,7 +3,7 @@
  * Plugin Name: se2Code Performance & Cloud Accelerator
  * Description: Elimina latencias de red, previene conflictos de caché, autoconfigura Nginx FastCGI + Redis y optimiza Elementor.
  * Author: se2Code
- * Version: 1.4.0
+ * Version: 1.5.0
  */
 
 if ( ! defined( 'ABSPATH' ) ) {
@@ -30,19 +30,45 @@ add_filter( 'http_request_args', function( $args ) {
 } );
 
 // ==============================================================================
-// 2. FLUIDEZ DEL BACKEND Y CONTROL DE HEARTBEAT
+// 2. FLUIDEZ DEL BACKEND, CONTROL DE HEARTBEAT Y OPTIMIZACIÓN DEL DASHBOARD
 // ==============================================================================
-// Reducir la frecuencia de Heartbeat a 60s en el panel de administración
+// Reducir la frecuencia de Heartbeat a 60s en pantallas de edición
 add_filter( 'heartbeat_settings', function( $settings ) {
     $settings['interval'] = 60;
     return $settings;
 } );
 
-// Desactivar llamadas externas lentas de telemetria / promociones de plugins en el admin
+// Desactivar Heartbeat totalmente en index.php (el escritorio no requiere autoguardado)
+add_action( 'admin_enqueue_scripts', function( $hook ) {
+    if ( 'index.php' === $hook ) {
+        wp_deregister_script( 'heartbeat' );
+        // Asegurar dependencias de datos que WooCommerce y Rank Math asumen en el dashboard
+        wp_enqueue_script( 'wp-data' );
+        wp_enqueue_script( 'wp-compose' );
+    }
+}, 99 );
+
+// Desactivar widgets de escritorio pesados (RSS externos, checks en bucle)
+add_action( 'wp_dashboard_setup', function() {
+    // Noticias y eventos externos de WordPress (hacen llamadas HTTP lentas a api.wordpress.org)
+    remove_meta_box( 'dashboard_primary', 'dashboard', 'side' );
+    remove_meta_box( 'dashboard_quick_press', 'dashboard', 'side' );
+    // Site Health en el escritorio (genera peticiones REST en segundo plano)
+    remove_meta_box( 'dashboard_site_health', 'dashboard', 'normal' );
+    // Widgets de analítica de terceros lentos
+    remove_meta_box( 'rank_math_dashboard_widget', 'dashboard', 'normal' );
+}, 999 );
+
+// Desactivar llamadas externas lentas de telemetría / eventos / feeds en el backend
 add_filter( 'pre_http_request', function( $pre, $args, $url ) {
-    if ( strpos( $url, 'elementor.com/api/v1/tracker' ) !== false ||
-         strpos( $url, 'api.elementor.com/v1/announcements' ) !== false ) {
-        return new WP_Error( 'http_request_failed', 'Disabled by se2Code' );
+    if ( is_admin() ) {
+        if ( strpos( $url, 'api.wordpress.org/events' ) !== false ||
+             strpos( $url, 'planet.wordpress.org' ) !== false ||
+             strpos( $url, 'elementor.com/api/v1/tracker' ) !== false ||
+             strpos( $url, 'api.elementor.com/v1/announcements' ) !== false ||
+             strpos( $url, 'rankmath.com' ) !== false ) {
+            return new WP_Error( 'http_request_failed', 'Disabled by se2Code' );
+        }
     }
     return $pre;
 }, 10, 3 );

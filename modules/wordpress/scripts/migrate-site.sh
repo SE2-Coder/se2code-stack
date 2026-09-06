@@ -330,6 +330,7 @@ fi
 mkdir -p "$SITE_WEB_DIR/wp-content/mu-plugins"
 cp "$STACK_ROOT/templates/se2code-core.php.tpl" "$SITE_WEB_DIR/wp-content/mu-plugins/se2code-core.php" 2>/dev/null || true
 chmod 644 "$SITE_WEB_DIR/wp-content/mu-plugins/se2code-core.php" 2>/dev/null || true
+rm -f "$SITE_WEB_DIR/wp-content/mu-plugins/wp-staging-optimizer.php" 2>/dev/null || true
 log_ok "Plugins de infraestructura y se2code-core.php listos en el sitio."
 
 # 13. Permisos del Sistema de Archivos y Activación de Servicios

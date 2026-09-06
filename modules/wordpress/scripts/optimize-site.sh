@@ -201,11 +201,30 @@ find "$SITE_WEB_DIR" -type f -exec chmod 644 {} + 2>/dev/null || true
 [ -f "$WP_CONFIG" ] && chmod 600 "$WP_CONFIG"
 log_ok "Permisos establecidos: directorios 755, archivos 644, wp-config 600 (usuario www-data)."
 
-# 7. Purga de Caché de Validación, Transients y Acondicionamiento de Elementor
+# 7. Purga de Caché de Validación, Transients, Colas y Cron de Sistema
 log_step "Optimizando Elementor y acondicionando permisos de caché FastCGI..."
 docker exec --user 33:33 "$PHP_CONTAINER" wp option update elementor_editor_break_frames 1 --path="$CONTAINER_PATH" >/dev/null 2>&1 || true
 docker exec --user 33:33 "$PHP_CONTAINER" wp option update elementor_allow_tracking 'no' --path="$CONTAINER_PATH" >/dev/null 2>&1 || true
 docker exec wp-nginx chmod -R 777 /var/cache/nginx >/dev/null 2>&1 || true
+
+log_step "Limpiando tareas fallidas de Action Scheduler y mu-plugins obsoletos..."
+rm -f "$SITE_WEB_DIR/wp-content/mu-plugins/wp-staging-optimizer.php" 2>/dev/null || true
+docker exec --user 33:33 "$PHP_CONTAINER" wp eval "
+global \$wpdb;
+\$wpdb->query(\"DELETE FROM \{$wpdb->prefix\}actionscheduler_actions WHERE status IN ('failed', 'canceled');\");
+\$wpdb->query(\"DELETE FROM \{$wpdb->prefix\}actionscheduler_logs WHERE action_id NOT IN (SELECT action_id FROM \{$wpdb->prefix\}actionscheduler_actions);\");
+" --path="$CONTAINER_PATH" >/dev/null 2>&1 || true
+
+log_step "Asegurando cron de sistema para WordPress y Action Scheduler..."
+CRON_FILE="/etc/cron.d/wordpress-cron"
+if [ -d "/etc/cron.d" ]; then
+    grep -q "$SITE_SLUG" "$CRON_FILE" 2>/dev/null || {
+        echo "* * * * * root docker exec -i --user 33:33 $PHP_CONTAINER wp --allow-root --path=$CONTAINER_PATH cron event run --due-now > /dev/null 2>&1" >> "$CRON_FILE"
+        echo "*/2 * * * * root docker exec -i --user 33:33 $PHP_CONTAINER wp --allow-root --path=$CONTAINER_PATH action-scheduler run > /dev/null 2>&1" >> "$CRON_FILE"
+        chmod 0644 "$CRON_FILE"
+        systemctl restart cron 2>/dev/null || true
+    }
+fi
 
 log_step "Purgando transients expirados y regenerando estilos de Elementor..."
 docker exec --user 33:33 "$PHP_CONTAINER" wp transient delete --all --path="$CONTAINER_PATH" >/dev/null 2>&1 || true

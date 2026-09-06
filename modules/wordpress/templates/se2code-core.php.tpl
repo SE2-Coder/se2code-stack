@@ -57,14 +57,7 @@ add_action( 'send_headers', function() {
     }
 } );
 
-add_filter( 'script_loader_tag', function( $tag, $handle ) {
-    if ( is_admin() || ( isset( $_GET['action'] ) && 'elementor' === $_GET['action'] ) ) {
-        if ( strpos( $tag, 'data-cfasync' ) === false ) {
-            $tag = str_replace( '<script ', '<script data-cfasync="false" ', $tag );
-        }
-    }
-    return $tag;
-}, 10, 2 );
+// script_loader_tag removed to prevent JS syntax corruption in Elementor templates
 
 // Inyectar stubs y polyfills seguros para Elementor y plugins de terceros en <head>
 add_action( 'admin_head', 'se2code_inject_elementor_safeguards', 0 );

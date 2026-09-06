@@ -52,8 +52,8 @@ RUN echo "opcache.enable=1" > /usr/local/etc/php/conf.d/opcache-recommended.ini 
     echo "opcache.validate_timestamps=1" >> /usr/local/etc/php/conf.d/opcache-recommended.ini && \
     echo "opcache.revalidate_freq=60" >> /usr/local/etc/php/conf.d/opcache-recommended.ini && \
     echo "opcache.save_comments=1" >> /usr/local/etc/php/conf.d/opcache-recommended.ini && \
-    echo "opcache.jit=1255" >> /usr/local/etc/php/conf.d/opcache-recommended.ini && \
-    echo "opcache.jit_buffer_size=128M" >> /usr/local/etc/php/conf.d/opcache-recommended.ini
+    echo "opcache.jit=disable" >> /usr/local/etc/php/conf.d/opcache-recommended.ini && \
+    echo "opcache.jit_buffer_size=0" >> /usr/local/etc/php/conf.d/opcache-recommended.ini
 
 # Instalar WP-CLI
 RUN curl -sSL https://raw.githubusercontent.com/wp-cli/builds/gh-pages/phar/wp-cli.phar -o /usr/local/bin/wp && \

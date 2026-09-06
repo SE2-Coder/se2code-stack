@@ -121,10 +121,14 @@ function se2code_inject_elementor_safeguards() {
     }
 }
 
-// Cache busting para assets de Elementor
+// Cache busting dinámico para assets de Elementor en el editor (evita cache obsoleto de Cloudflare)
 add_filter( 'script_loader_src', function( $src, $handle ) {
-    if ( strpos( $src, 'elementor' ) !== false && strpos( $src, 'ver=' ) !== false ) {
-        $src = add_query_arg( 'se2v', '4', $src );
+    if ( strpos( $src, 'elementor' ) !== false ) {
+        if ( isset( $_GET['action'] ) && 'elementor' === $_GET['action'] ) {
+            $src = add_query_arg( 'se2v', (string) ( intval( time() / 300 ) ), $src ); // Rota cada 5 min en el editor
+        } else {
+            $src = add_query_arg( 'se2v', '5', $src );
+        }
     }
     return $src;
 }, 99, 2 );

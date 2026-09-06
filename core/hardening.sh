@@ -10,11 +10,11 @@
 #   2. Creación de usuario administrador no-root con contraseña sudo
 #   3. Gestión de llaves SSH (Pegar / Generar en servidor / Importar de root)
 #   4. Selección dinámica de puerto SSH con rangos y validación
-#   5. Hardening de SSH y neutralización de overrides de cloud-init
+#   5. Hardening de SSH, socket systemd y neutralización de cloud-init
 #   6. Configuración de Firewall UFW (Nativo, sin conflictos)
 #   7. Protección de fuerza bruta con Fail2ban (Systemd + nftables)
 #   8. Hardening del Kernel (sysctl), Modprobe y permisos estrictos
-#   9. Salvaguarda de conectividad Anti-Bloqueo
+#   9. Verificación en vivo del socket y salvaguarda Anti-Bloqueo
 # ==============================================================================
 
 set -eo pipefail
@@ -238,11 +238,21 @@ while true; do
 done
 
 # ------------------------------------------------------------------------------
-# 5. Hardening de OpenSSH y Sanitización de Cloud-Init
+# 5. Hardening de OpenSSH, Solución de Sockets Systemd y Limpieza Cloud-Init
 # ------------------------------------------------------------------------------
-log_step "Paso 5/9: Aplicando Hardening a OpenSSH y neutralizando overrides..."
+log_step "Paso 5/9: Aplicando Hardening a OpenSSH y resolviendo sockets de Debian 12/13..."
 
-# Crear o actualizar archivo drop-in para Debian moderno
+# 5.1 Configuración de sshd_config principal
+if [ -f /etc/ssh/sshd_config ]; then
+    # Comentar o actualizar directivas Port previas
+    if grep -q "^Port " /etc/ssh/sshd_config; then
+        sed -i "s/^Port .*/Port ${CHOSEN_SSH_PORT}/" /etc/ssh/sshd_config
+    else
+        echo "Port ${CHOSEN_SSH_PORT}" >> /etc/ssh/sshd_config
+    fi
+fi
+
+# 5.2 Crear o actualizar archivo drop-in para OpenSSH moderno
 mkdir -p /etc/ssh/sshd_config.d
 cat > /etc/ssh/sshd_config.d/99-se2code-hardening.conf << SSH_EOF
 # ==============================================================================
@@ -258,14 +268,7 @@ ClientAliveInterval 300
 ClientAliveCountMax 2
 SSH_EOF
 
-# Asegurar directiva Port en sshd_config principal si está presente
-if [ -f /etc/ssh/sshd_config ]; then
-    if grep -q "^Port " /etc/ssh/sshd_config; then
-        sed -i "s/^Port .*/Port ${CHOSEN_SSH_PORT}/" /etc/ssh/sshd_config
-    fi
-fi
-
-# Neutralizar overrides habituales de proveedores cloud (Hostinger, AWS, Hetzner)
+# 5.3 Neutralizar overrides habituales de proveedores cloud (Hostinger, AWS, Hetzner)
 for cloud_file in /etc/ssh/sshd_config.d/50-cloud-init.conf /etc/ssh/sshd_config.d/*cloud*; do
     if [ -f "$cloud_file" ] && [ "$cloud_file" != "/etc/ssh/sshd_config.d/99-se2code-hardening.conf" ]; then
         log_info "Detectado override cloud: $cloud_file. Neutralizando PasswordAuthentication yes..."
@@ -273,19 +276,57 @@ for cloud_file in /etc/ssh/sshd_config.d/50-cloud-init.conf /etc/ssh/sshd_config
     fi
 done
 
-# Validación de sintaxis antes de reiniciar el demonio
+# 5.4 CRÍTICO EN DEBIAN 12/13: Solucionar activación por socket systemd (ssh.socket)
+# En Debian 12, ssh.socket intercepta el puerto 22 e ignora sshd_config.
+# Desactivamos ssh.socket y forzamos el servicio standalone ssh.service, además de configurar el override.
+mkdir -p /etc/systemd/system/ssh.socket.d
+cat > /etc/systemd/system/ssh.socket.d/listen.conf << SOCK_EOF
+[Socket]
+ListenStream=
+ListenStream=${CHOSEN_SSH_PORT}
+SOCK_EOF
+
+systemctl stop ssh.socket 2>/dev/null || true
+systemctl disable ssh.socket 2>/dev/null || true
+systemctl daemon-reload
+
+# 5.5 Validación de sintaxis antes de reiniciar el demonio
 if sshd -t; then
-    systemctl restart ssh 2>/dev/null || systemctl restart sshd 2>/dev/null || true
-    log_ok "Servidor SSH configurado y reiniciado con éxito."
+    systemctl enable --now ssh.service 2>/dev/null || systemctl enable --now ssh 2>/dev/null || true
+    systemctl restart ssh.service 2>/dev/null || systemctl restart ssh 2>/dev/null || true
+    log_ok "Demonio SSH reiniciado y reconfigurado."
 else
     log_error "Error de sintaxis en la configuración de SSH. Revisa /etc/ssh/sshd_config."
+fi
+
+# 5.6 Comprobar que SSH esté escuchando activamente en el nuevo puerto
+log_info "Comprobando que SSH esté escuchando en el puerto ${CHOSEN_SSH_PORT}/tcp..."
+SSH_UP=false
+for i in {1..10}; do
+    if ss -tln | grep -q ":${CHOSEN_SSH_PORT} "; then
+        SSH_UP=true
+        break
+    fi
+    sleep 1
+done
+
+if [ "$SSH_UP" = true ]; then
+    log_ok "Servicio SSH activo y escuchando en el puerto ${CHOSEN_SSH_PORT}/tcp."
+else
+    log_warn "SSH no respondió inmediatamente en el puerto ${CHOSEN_SSH_PORT}. Reintentando arranque forzado..."
+    systemctl restart ssh 2>/dev/null || systemctl restart sshd 2>/dev/null || true
+    sleep 2
+    if ss -tln | grep -q ":${CHOSEN_SSH_PORT} "; then
+        log_ok "Servicio SSH arrancado con éxito en el puerto ${CHOSEN_SSH_PORT}/tcp."
+    else
+        log_error "Alerta: No se detecta escucha en el puerto ${CHOSEN_SSH_PORT}/tcp. El puerto 22 se mantendrá abierto."
+    fi
 fi
 
 # ------------------------------------------------------------------------------
 # 6. Configuración del Firewall UFW (Nativo y Exclusivo)
 # ------------------------------------------------------------------------------
 log_step "Paso 6/9: Configuración del Firewall UFW..."
-ufw --force reset >/dev/null 2>&1 || true
 
 # Políticas maestras por defecto
 ufw default deny incoming >/dev/null 2>&1
@@ -293,10 +334,9 @@ ufw default allow outgoing >/dev/null 2>&1
 
 # Apertura de puertos esenciales
 ufw allow "${CHOSEN_SSH_PORT}/tcp" comment "se2Code SSH Custom" >/dev/null 2>&1
-# Mantener temporalmente puerto 22 para salvaguarda
-if [ "$CHOSEN_SSH_PORT" != "22" ]; then
-    ufw allow 22/tcp comment "se2Code SSH Transition" >/dev/null 2>&1
-fi
+
+# Mantener SIEMPRE abierto el puerto 22 durante la transición para evitar bloqueos
+ufw allow 22/tcp comment "se2Code SSH Transition" >/dev/null 2>&1
 
 ufw allow 80/tcp comment "HTTP Nginx" >/dev/null 2>&1
 ufw allow 443/tcp comment "HTTPS Nginx" >/dev/null 2>&1
@@ -441,19 +481,19 @@ log_ok "Permisos de seguridad estrictos aplicados en archivos del sistema."
 # ------------------------------------------------------------------------------
 log_step "Paso 9/9: Salvaguarda de Conexión (Anti-Lockout)"
 
-SERVER_IP=$(curl -s4 --max-time 3 ifconfig.me || curl -s4 --max-time 3 icanhazip.com || ip route get 1.1.1.1 2>/dev/null | awk '{print $7}' || echo "TU_IP_DEL_SERVIDOR")
+SERVER_IP=$(curl -s4 --max-time 3 ifconfig.me || curl -s4 --max-time 3 icanhazip.com || ip route get 1.1.1.1 2>/dev/null | awk "{print \$7}" || echo "TU_IP_DEL_SERVIDOR")
 
 echo -e "\n${C_BOLD}${C_YELLOW}╔════════════════════════════════════════════════════════════════════════╗${C_RESET}"
 echo -e "${C_BOLD}${C_YELLOW}║         ⚠️  ATENCIÓN: PRUEBA DE CONEXIÓN EN TERMINAL NUEVA             ║${C_RESET}"
 echo -e "${C_BOLD}${C_YELLOW}╚════════════════════════════════════════════════════════════════════════╝${C_RESET}"
 echo -e "${C_BOLD}¡NO CIERRES ESTA TERMINAL ACTUAL!${C_RESET}"
 echo -e "Abre una ${C_CYAN}NUEVA ventana de terminal${C_RESET} en tu computadora local y prueba conectarte:"
-echo -e "\n  ${C_BOLD}${C_GREEN}ssh -p ${CHOSEN_SSH_PORT} ${ADMIN_USER}@${SERVER_IP}${C_RESET}"
-echo -e "  ${C_GRAY}(o añade '-i /ruta/a/tu/llave.pem' si usas una llave en ubicación específica)${C_RESET}\n"
+echo -e "\n  ${C_BOLD}${C_GREEN}ssh -p ${CHOSEN_SSH_PORT} ${ADMIN_USER}@${SERVER_IP} -i <ruta-de-tu-llave.pem>${C_RESET}\n"
+echo -e "${C_GRAY}(Nota: recuerda que en OpenSSH la bandera de puerto es -p en minúscula).${C_RESET}\n"
 echo -e "Una vez conectado, valida que puedas usar sudo ejecutando: ${C_BOLD}sudo whoami${C_RESET}\n"
 
-read -r -p "¿La conexión funcionó correctamente en la nueva terminal? [S/n]: " TEST_OK
-TEST_OK="${TEST_OK:-S}"
+read -r -p "¿Confirmas que pudiste conectar con éxito en la nueva terminal? [s/N]: " TEST_OK
+TEST_OK="${TEST_OK:-N}"
 
 if [[ "$TEST_OK" =~ ^[Ss]$ ]]; then
     if [ "$CHOSEN_SSH_PORT" != "22" ]; then
@@ -471,6 +511,6 @@ if [[ "$TEST_OK" =~ ^[Ss]$ ]]; then
     echo -e "  - Fail2ban:              ${C_BOLD}${C_GREEN}ACTIVO (Systemd + nftables)${C_RESET}"
     echo -e "  - Kernel Hardening:      ${C_BOLD}${C_GREEN}APLICADO${C_RESET}\n"
 else
-    log_warn "Se mantendrá abierto el puerto 22/tcp en UFW para evitar bloqueos."
-    log_warn "Puedes revisar /etc/ssh/sshd_config.d/99-se2code-hardening.conf y tus llaves antes de cerrar el puerto 22."
+    log_warn "Manteniendo abierto el puerto 22/tcp en UFW para evitar que quedes bloqueado."
+    log_warn "Puedes probar ingresar de nuevo o revisar tu configuración antes de cerrar el puerto 22."
 fi

@@ -209,11 +209,11 @@ docker exec wp-nginx chmod -R 777 /var/cache/nginx >/dev/null 2>&1 || true
 
 log_step "Limpiando tareas fallidas de Action Scheduler y mu-plugins obsoletos..."
 rm -f "$SITE_WEB_DIR/wp-content/mu-plugins/wp-staging-optimizer.php" 2>/dev/null || true
-docker exec --user 33:33 "$PHP_CONTAINER" wp eval "
-global \$wpdb;
-\$wpdb->query(\"DELETE FROM \{$wpdb->prefix\}actionscheduler_actions WHERE status IN ('failed', 'canceled');\");
-\$wpdb->query(\"DELETE FROM \{$wpdb->prefix\}actionscheduler_logs WHERE action_id NOT IN (SELECT action_id FROM \{$wpdb->prefix\}actionscheduler_actions);\");
-" --path="$CONTAINER_PATH" >/dev/null 2>&1 || true
+docker exec --user 33:33 "$PHP_CONTAINER" wp eval '
+global $wpdb;
+$wpdb->query("DELETE FROM " . $wpdb->prefix . "actionscheduler_actions WHERE status IN (\\x27failed\\x27, \\x27canceled\\x27);");
+$wpdb->query("DELETE FROM " . $wpdb->prefix . "actionscheduler_logs WHERE action_id NOT IN (SELECT action_id FROM " . $wpdb->prefix . "actionscheduler_actions);");
+' --path="$CONTAINER_PATH" >/dev/null 2>&1 || true
 
 log_step "Asegurando cron de sistema para WordPress y Action Scheduler..."
 CRON_FILE="/etc/cron.d/wordpress-cron"

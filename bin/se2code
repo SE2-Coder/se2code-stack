@@ -15,6 +15,11 @@ STACK_ROOT="$(cd "$(dirname "$REAL_SCRIPT")/.." && pwd)"
 # Soporte para subcomandos directos por línea de comandos (CLI)
 if [ $# -gt 0 ]; then
     case "$1" in
+        pma|phpmyadmin)
+            shift
+            bash "$STACK_ROOT/modules/wordpress/scripts/manage-pma.sh" "$@"
+            exit $?
+            ;;
         hardening|security)
             shift
             bash "$STACK_ROOT/core/hardening.sh" "$@"
@@ -72,7 +77,13 @@ while true; do
     # 1. Resumen de estado de WordPress
     WP_SITES_COUNT=$(find "$STACK_ROOT/modules/wordpress/nginx/conf.d" -type f -name "*.conf" ! -name "default*.conf" 2>/dev/null | wc -l | tr -d ' ')
     
-    # 2. Detección en vivo de WireGuard VPN
+    # 2. Detección en vivo de phpMyAdmin
+    PMA_RUNNING=false
+    if command -v docker >/dev/null 2>&1 && docker ps --format '{{.Names}}' 2>/dev/null | grep -q "^wp-phpmyadmin$"; then
+        PMA_RUNNING=true
+    fi
+
+    # 3. Detección en vivo de WireGuard VPN
     WG_RUNNING=false
     if command -v docker >/dev/null 2>&1 && docker ps --format '{{.Names}}' 2>/dev/null | grep -q "^wireguard$" && [ -f "$STACK_ROOT/modules/wireguard/config/peer1/peer1.conf" ]; then
         WG_RUNNING=true
@@ -82,6 +93,9 @@ while true; do
     STATUS_LINE="  ${C_BOLD}ESTADO:${C_RESET} Sitios WordPress: ${C_GREEN}${WP_SITES_COUNT}${C_RESET} | NGINX: ${C_GREEN}Activo${C_RESET} | MariaDB: ${C_GREEN}Activa${C_RESET}"
     if [ "$WG_RUNNING" = true ]; then
         STATUS_LINE="${STATUS_LINE} | VPN: ${C_GREEN}Activo ✔${C_RESET}"
+    fi
+    if [ "$PMA_RUNNING" = true ]; then
+        STATUS_LINE="${STATUS_LINE} | PMA: ${C_GREEN}Activo ✔${C_RESET}"
     fi
     echo -e "$STATUS_LINE"
     echo -e "${C_CYAN}================================================================${C_RESET}"
@@ -99,23 +113,24 @@ while true; do
     echo -e "  9) 🧹 Purgar Cachés del Servidor (FastCGI Cache + Redis)"
     echo -e " 10) 🚀 Optimizar Sitio Existente (Redis + Nginx Helper + Anti-Conflictos)"
     echo -e " 11) 🔗 Reemplazo Canónico de URLs (4 Variantes ➔ 1 Sola URL & Elementor)"
+    echo -e " 12) 🗄️  phpMyAdmin (Gestor Web de Bases de Datos - Iniciar / Detener / Reset Pass)"
     echo -e ""
 
     # Menú condicional de WireGuard y Sistema
     if [ "$WG_RUNNING" = true ]; then
         echo -e "  ${C_BOLD}${C_CYAN}[ GESTIÓN DE WIREGUARD VPN (Activo ✔) ]${C_RESET}"
-        echo -e " 12) 📱 Mostrar Código QR para Celular (Peer 1)"
-        echo -e " 13) 👥 Ver conexiones activas y estado del túnel"
-        echo -e " 14) ⏹️  Detener WireGuard VPN"
+        echo -e " 13) 📱 Mostrar Código QR para Celular (Peer 1)"
+        echo -e " 14) 👥 Ver conexiones activas y estado del túnel"
+        echo -e " 15) ⏹️  Detener WireGuard VPN"
         echo -e ""
         echo -e "  ${C_BOLD}${C_CYAN}[ SISTEMA Y SEGURIDAD ]${C_RESET}"
-        echo -e " 15) 🛡️  Securización y Hardening del Servidor (Usuario sudo, SSH, UFW, Fail2ban, Kernel)"
-        echo -e " 16) 📊 Diagnóstico de Hardware y Memoria en vivo"
-        echo -e " 17) 🛡️  Activar / Ajustar Escudo de Memoria Swap"
-        echo -e " 18) ❌ Salir"
+        echo -e " 16) 🛡️  Securización y Hardening del Servidor (Usuario sudo, SSH, UFW, Fail2ban, Kernel)"
+        echo -e " 17) 📊 Diagnóstico de Hardware y Memoria en vivo"
+        echo -e " 18) 🛡️  Activar / Ajustar Escudo de Memoria Swap"
+        echo -e " 19) ❌ Salir"
         echo -e "${C_CYAN}================================================================${C_RESET}"
 
-        read -r -p "Selecciona una opción [1-18]: " MENU_CHOICE
+        read -r -p "Selecciona una opción [1-19]: " MENU_CHOICE
 
         case "$MENU_CHOICE" in
             1)
@@ -206,16 +221,16 @@ while true; do
         esac
     else
         echo -e "  ${C_BOLD}${C_CYAN}[ MÓDULOS OPCIONALES ]${C_RESET}"
-        echo -e " 12) 🛡️  Instalar y Configurar WireGuard VPN"
+        echo -e " 13) 🛡️  Instalar y Configurar WireGuard VPN"
         echo -e ""
         echo -e "  ${C_BOLD}${C_CYAN}[ SISTEMA Y SEGURIDAD ]${C_RESET}"
-        echo -e " 13) 🛡️  Securización y Hardening del Servidor (Usuario sudo, SSH, UFW, Fail2ban, Kernel)"
-        echo -e " 14) 📊 Diagnóstico de Hardware y Memoria en vivo"
-        echo -e " 15) 🛡️  Activar / Ajustar Escudo de Memoria Swap"
-        echo -e " 16) ❌ Salir"
+        echo -e " 14) 🛡️  Securización y Hardening del Servidor (Usuario sudo, SSH, UFW, Fail2ban, Kernel)"
+        echo -e " 15) 📊 Diagnóstico de Hardware y Memoria en vivo"
+        echo -e " 16) 🛡️  Activar / Ajustar Escudo de Memoria Swap"
+        echo -e " 17) ❌ Salir"
         echo -e "${C_CYAN}================================================================${C_RESET}"
 
-        read -r -p "Selecciona una opción [1-16]: " MENU_CHOICE
+        read -r -p "Selecciona una opción [1-17]: " MENU_CHOICE
 
         case "$MENU_CHOICE" in
             1)
@@ -268,22 +283,26 @@ while true; do
                 read -r -p "Presiona ENTER para volver al menú..." _
                 ;;
             12)
-                bash "$STACK_ROOT/modules/wireguard/setup-vpn.sh"
+                bash "$STACK_ROOT/modules/wordpress/scripts/manage-pma.sh"
                 read -r -p "Presiona ENTER para volver al menú..." _
                 ;;
             13)
-                bash "$STACK_ROOT/core/hardening.sh"
+                bash "$STACK_ROOT/modules/wireguard/setup-vpn.sh"
                 read -r -p "Presiona ENTER para volver al menú..." _
                 ;;
             14)
-                show_hardware_diagnostics
+                bash "$STACK_ROOT/core/hardening.sh"
                 read -r -p "Presiona ENTER para volver al menú..." _
                 ;;
             15)
+                show_hardware_diagnostics
+                read -r -p "Presiona ENTER para volver al menú..." _
+                ;;
+            16)
                 create_swap_shield 2
                 read -r -p "Presiona ENTER para volver al menú..." _
                 ;;
-            16|q|Q)
+            17|q|Q)
                 echo -e "\n${C_CYAN}¡Hasta pronto! Gracias por usar se2Code Stack.${C_RESET}\n"
                 exit 0
                 ;;

@@ -98,6 +98,27 @@ services:
     networks:
       - wp-network
 
+  # ============================================================================
+  # PHPMYADMIN 5.2 - Gestor Web de Bases de Datos (Bajo Demanda / On-Demand)
+  # ============================================================================
+  phpmyadmin:
+    image: phpmyadmin:5.2-apache
+    container_name: wp-phpmyadmin
+    restart: unless-stopped
+    ports:
+      - "${PMA_BIND_IP:-0.0.0.0}:${PMA_PORT:-8080}:80"
+    environment:
+      PMA_HOST: mariadb
+      PMA_PORT: 3306
+      PMA_ABSOLUTE_URI: "${PMA_ABSOLUTE_URI:-}"
+      UPLOAD_LIMIT: 256M
+      MEMORY_LIMIT: 512M
+      MAX_EXECUTION_TIME: 600
+    networks:
+      - wp-network
+    depends_on:
+      - mariadb
+
 networks:
   wp-network:
     name: wp-network

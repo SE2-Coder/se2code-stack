@@ -99,6 +99,8 @@ if [ "$INSTALL_WP" = true ]; then
 COMPOSE_PROJECT_NAME=se2code_wp
 MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASS}
 REDIS_PASSWORD=${REDIS_PASS}
+PMA_PORT=8080
+PMA_BIND_IP=0.0.0.0
 ENV_EOF
         chmod 600 .env
         log_ok "Archivo .env creado con credenciales protegidas."

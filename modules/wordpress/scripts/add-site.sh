@@ -304,6 +304,31 @@ docker exec "$PHP_CONTAINER" chown -R www-data:www-data /var/log/php 2>/dev/null
 docker exec wp-nginx nginx -t >/dev/null 2>&1 && docker exec wp-nginx nginx -s reload 2>/dev/null || docker restart wp-nginx >/dev/null 2>&1 || true
 docker restart "$PHP_CONTAINER" >/dev/null 2>&1 || true
 
+# 9. Registrar Cron de Sistema y Action Scheduler
+CRON_FILE="/etc/cron.d/wordpress-cron"
+if [ -d "/etc/cron.d" ]; then
+    log_step "Registrando cron de sistema para WordPress y Action Scheduler..."
+    if ! grep -Fq "/var/www/html/$SITE_SLUG cron event run" "$CRON_FILE" 2>/dev/null; then
+        echo "* * * * * root docker exec -i --user 33:33 $PHP_CONTAINER wp --allow-root --path=/var/www/html/$SITE_SLUG cron event run --due-now > /dev/null 2>&1" >> "$CRON_FILE"
+    fi
+    if ! grep -Fq "/var/www/html/$SITE_SLUG action-scheduler run" "$CRON_FILE" 2>/dev/null; then
+        echo "*/2 * * * * root docker exec -i --user 33:33 $PHP_CONTAINER wp --allow-root --path=/var/www/html/$SITE_SLUG action-scheduler run > /dev/null 2>&1" >> "$CRON_FILE"
+    fi
+    if [ ${#SUB_LANGS[@]} -gt 0 ]; then
+        for lang in "${SUB_LANGS[@]}"; do
+            if ! grep -Fq "/var/www/html/$SITE_SLUG/$lang cron event run" "$CRON_FILE" 2>/dev/null; then
+                echo "* * * * * root docker exec -i --user 33:33 $PHP_CONTAINER wp --allow-root --path=/var/www/html/$SITE_SLUG/$lang cron event run --due-now > /dev/null 2>&1" >> "$CRON_FILE"
+            fi
+            if ! grep -Fq "/var/www/html/$SITE_SLUG/$lang action-scheduler run" "$CRON_FILE" 2>/dev/null; then
+                echo "*/2 * * * * root docker exec -i --user 33:33 $PHP_CONTAINER wp --allow-root --path=/var/www/html/$SITE_SLUG/$lang action-scheduler run > /dev/null 2>&1" >> "$CRON_FILE"
+            fi
+        done
+    fi
+    chmod 0644 "$CRON_FILE"
+    systemctl restart cron 2>/dev/null || true
+    log_ok "Cron de sistema registrado en $CRON_FILE."
+fi
+
 if [ "${NEED_ACME:-false}" = true ]; then
     log_section "EMISIÓN AUTOMÁTICA DE CERTIFICADO LET'S ENCRYPT (ACME.SH)"
     if [ ! -f /root/.acme.sh/acme.sh ]; then

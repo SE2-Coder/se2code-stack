@@ -172,6 +172,25 @@ find "$TARGET_DIR" -type d -exec chmod 755 {} + 2>/dev/null || true
 find "$TARGET_DIR" -type f -exec chmod 644 {} + 2>/dev/null || true
 [ -f "$TARGET_DIR/wp-config.php" ] && chmod 600 "$TARGET_DIR/wp-config.php"
 
+# Registrar cron de sistema para WordPress y Action Scheduler en este sub-sitio
+CRON_FILE="/etc/cron.d/wordpress-cron"
+SUB_CONTAINER_PATH="/var/www/html/$SITE_SLUG/$SUB_NAME"
+PHP_CONTAINER="wp-php84"
+if grep -q "fastcgi_pass.*wp-php85" "$VHOST_FILE" 2>/dev/null; then
+    PHP_CONTAINER="wp-php85"
+fi
+if [ -d "/etc/cron.d" ]; then
+    if ! grep -Fq "$SUB_CONTAINER_PATH cron event run" "$CRON_FILE" 2>/dev/null; then
+        echo "* * * * * root docker exec -i --user 33:33 $PHP_CONTAINER wp --allow-root --path=$SUB_CONTAINER_PATH cron event run --due-now > /dev/null 2>&1" >> "$CRON_FILE"
+    fi
+    if ! grep -Fq "$SUB_CONTAINER_PATH action-scheduler run" "$CRON_FILE" 2>/dev/null; then
+        echo "*/2 * * * * root docker exec -i --user 33:33 $PHP_CONTAINER wp --allow-root --path=$SUB_CONTAINER_PATH action-scheduler run > /dev/null 2>&1" >> "$CRON_FILE"
+    fi
+    chmod 0644 "$CRON_FILE"
+    systemctl restart cron 2>/dev/null || true
+    log_ok "Cron de sistema y Action Scheduler registrados para [/$SUB_NAME/]."
+fi
+
 echo -e "\n${C_BOLD}${C_GREEN}✔ SUB-SITIO APROVISIONADO EXITOSAMENTE${C_RESET}"
 echo -e "  - URL Acceso    : ${C_CYAN}https://${DOMAIN}/${SUB_NAME}/${C_RESET}"
 echo -e "  - Carpeta Web   : ${TARGET_DIR}"

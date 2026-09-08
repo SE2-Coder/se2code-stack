@@ -93,4 +93,11 @@ log_ok "Archivos web movidos a la papelera de seguridad: $TRASH_DIR"
 docker exec wp-nginx nginx -s reload 2>/dev/null || true
 docker restart wp-php84 wp-php85 >/dev/null 2>&1 || true
 
+# 6. Limpiar crons asociados a este sitio
+if [ -f "/etc/cron.d/wordpress-cron" ]; then
+    sed -i "/\/var\/www\/html\/$SITE_SLUG/d" "/etc/cron.d/wordpress-cron"
+    systemctl restart cron 2>/dev/null || true
+    log_ok "Reglas de cron eliminadas para [$SITE_SLUG]."
+fi
+
 log_ok "Sitio [$SITE_SLUG] desmantelado completamente y recursos liberados."

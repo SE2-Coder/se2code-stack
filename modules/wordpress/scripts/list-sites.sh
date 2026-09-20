@@ -14,7 +14,8 @@ echo -e "\n${C_BOLD}${C_CYAN}===================================================
 echo -e "  ${C_BOLD}📋 SITIOS WORDPRESS INSTALADOS EN ESTE SERVIDOR${C_RESET}"
 echo -e "${C_CYAN}======================================================================${C_RESET}"
 
-CONF_FILES=($(find "$STACK_ROOT/nginx/conf.d" -type f -name "*.conf" ! -name "default*.conf" 2>/dev/null | sort || true))
+CONF_FILES=($(grep -l "fastcgi_pass" "$STACK_ROOT/nginx/conf.d"/*.conf 2>/dev/null | sort || true))
+APP_FILES=($(grep -l "proxy_pass" "$STACK_ROOT/nginx/conf.d"/*.conf 2>/dev/null | sort || true))
 
 if [ ${#CONF_FILES[@]} -eq 0 ]; then
     echo -e "  ${C_YELLOW}Actualmente no hay ningún sitio WordPress configurado.${C_RESET}"
@@ -67,3 +68,26 @@ done
 
 echo -e "  ${C_GRAY}--------------------------------------------------------------------------------${C_RESET}"
 echo -e "  Total de sitios en producción: ${C_BOLD}${C_GREEN}${#CONF_FILES[@]}${C_RESET}\n"
+
+# Tabla de Aplicaciones y Proxies (Astro, Directus, etc.)
+if [ ${#APP_FILES[@]} -gt 0 ]; then
+    echo -e "\n${C_BOLD}${C_PURPLE}======================================================================${C_RESET}"
+    echo -e "  ${C_BOLD}🚀 APLICACIONES & PROXIES NGINX (ASTRO / DIRECTUS / APPS)${C_RESET}"
+    echo -e "${C_PURPLE}======================================================================${C_RESET}"
+    printf "  ${C_BOLD}%-3s %-20s %-28s %-12s %-10s${C_RESET}\n" "#" "APP / SLUG" "DOMINIO" "TIPO" "SSL"
+    echo -e "  ${C_GRAY}--------------------------------------------------------------------------------${C_RESET}"
+    app_idx=1
+    for aconf in "${APP_FILES[@]}"; do
+        aslug=$(basename "$aconf" .conf)
+        adomain=$(grep -E "^\s*server_name\s+" "$aconf" | head -n 1 | awk '{print $2}' | tr -d ";" || echo "$aslug")
+        acert="$STACK_ROOT/nginx/certs/$adomain/fullchain.pem"
+        if [ -f "$acert" ] || grep -q "ssl_certificate" "$aconf"; then
+            assl="${C_GREEN}Activo ✔${C_RESET}"
+        else
+            assl="${C_YELLOW}No SSL ⚠${C_RESET}"
+        fi
+        printf "  %-3s %-20s %-28s %-12s %b\n" "$app_idx" "$aslug" "$adomain" "Proxy Pass" "$assl"
+        app_idx=$((app_idx + 1))
+    done
+fi
+echo ""

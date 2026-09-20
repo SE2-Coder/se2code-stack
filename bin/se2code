@@ -74,8 +74,9 @@ source "$STACK_ROOT/core/hardware.sh"
 while true; do
     show_banner
     
-    # 1. Resumen de estado de WordPress
-    WP_SITES_COUNT=$(find "$STACK_ROOT/modules/wordpress/nginx/conf.d" -type f -name "*.conf" ! -name "default*.conf" 2>/dev/null | wc -l | tr -d ' ')
+    # 1. Conteo inteligente: WordPress vs Aplicaciones Proxy
+    WP_SITES_COUNT=$(grep -l "fastcgi_pass" "$STACK_ROOT/modules/wordpress/nginx/conf.d"/*.conf 2>/dev/null | wc -l | tr -d ' ')
+    APPS_COUNT=$(grep -l "proxy_pass" "$STACK_ROOT/modules/wordpress/nginx/conf.d"/*.conf 2>/dev/null | wc -l | tr -d ' ')
     
     # 2. Detección en vivo de phpMyAdmin
     PMA_RUNNING=false
@@ -90,7 +91,11 @@ while true; do
     fi
 
     # Barra de estado dinámica
-    STATUS_LINE="  ${C_BOLD}ESTADO:${C_RESET} Sitios WordPress: ${C_GREEN}${WP_SITES_COUNT}${C_RESET} | NGINX: ${C_GREEN}Activo${C_RESET} | MariaDB: ${C_GREEN}Activa${C_RESET}"
+    STATUS_LINE="  ${C_BOLD}ESTADO:${C_RESET} Sitios WordPress: ${C_GREEN}${WP_SITES_COUNT}${C_RESET}"
+    if [ "$APPS_COUNT" -gt 0 ]; then
+        STATUS_LINE="${STATUS_LINE} | Apps: ${C_CYAN}${APPS_COUNT}${C_RESET}"
+    fi
+    STATUS_LINE="${STATUS_LINE} | NGINX: ${C_GREEN}Activo${C_RESET} | MariaDB: ${C_GREEN}Activa${C_RESET}"
     if [ "$WG_RUNNING" = true ]; then
         STATUS_LINE="${STATUS_LINE} | VPN: ${C_GREEN}Activo ✔${C_RESET}"
     fi

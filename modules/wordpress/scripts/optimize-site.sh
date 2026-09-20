@@ -16,7 +16,7 @@ echo -e "\n${C_BOLD}${C_CYAN}===================================================
 echo -e "  ${C_BOLD}🚀 OPTIMIZADOR POST-MIGRACIÓN & CONFIGURACIÓN DE CACHÉ SE2CODE${C_RESET}"
 echo -e "${C_CYAN}======================================================================${C_RESET}\n"
 
-CONF_FILES=($(find "$STACK_ROOT/nginx/conf.d" -type f -name "*.conf" ! -name "default*.conf" 2>/dev/null | sort || true))
+CONF_FILES=($(grep -l "fastcgi_pass" "$STACK_ROOT/nginx/conf.d"/*.conf 2>/dev/null | sort || true))
 if [ ${#CONF_FILES[@]} -eq 0 ]; then
     log_error "No hay sitios WordPress configurados en el stack."
     exit 1
@@ -297,7 +297,7 @@ optimize_single_instance() {
     sudo chown -R 33:33 "$T_DIR" 2>/dev/null || chown -R 33:33 "$T_DIR" 2>/dev/null || true
     find "$T_DIR" -type d -exec chmod 755 {} + 2>/dev/null || true
     find "$T_DIR" -type f -exec chmod 644 {} + 2>/dev/null || true
-    [ -f "$WP_CONFIG" ] && chmod 600 "$WP_CONFIG"
+    [ -f "$WP_CONFIG" ] && (sudo chmod 640 "$WP_CONFIG" 2>/dev/null || chmod 640 "$WP_CONFIG" 2>/dev/null || true)
     log_ok "Permisos establecidos: directorios 755, archivos 644, wp-config 600 (usuario www-data)."
 
     # 7. Action Scheduler y Cron de Sistema

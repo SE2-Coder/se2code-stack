@@ -162,6 +162,11 @@ if docker exec --user 33:33 "$PHP_CONTAINER" wp plugin is-active elementor --pat
         docker exec -i --user 33:33 "$PHP_CONTAINER" wp elementor replace-urls "$v" "$CANONICAL_DEST" --path="$CONTAINER_PATH" >/dev/null 2>&1 || true
     done
     docker exec -i --user 33:33 "$PHP_CONTAINER" wp elementor flush_css --path="$CONTAINER_PATH" >/dev/null 2>&1 || true
+    docker exec -i --user 33:33 "$PHP_CONTAINER" wp option update elementor_experiment-element-caching 'inactive' --path="$CONTAINER_PATH" >/dev/null 2>&1 || true
+    docker exec -i --user 33:33 "$PHP_CONTAINER" wp eval '
+    global $wpdb;
+    $wpdb->query("DELETE FROM " . $wpdb->prefix . "postmeta WHERE meta_key = \x27_elementor_element_cache\x27;");
+    ' --path="$CONTAINER_PATH" >/dev/null 2>&1 || true
     log_ok "Caché CSS compilada de Elementor regenerada con éxito."
 fi
 
@@ -170,7 +175,9 @@ log_section "PASO 3: LIMPIEZA DE CACHÉ Y PERMALINKS"
 docker exec -i --user 33:33 "$PHP_CONTAINER" wp rewrite flush --path="$CONTAINER_PATH" >/dev/null 2>&1 || true
 docker exec -i --user 33:33 "$PHP_CONTAINER" wp cache flush --path="$CONTAINER_PATH" >/dev/null 2>&1 || true
 docker exec -i redis redis-cli FLUSHALL >/dev/null 2>&1 || true
-sudo rm -rf /var/cache/nginx/* 2>/dev/null || true
+docker exec wp-nginx chown -R www-data:www-data /var/cache/nginx /var/log/nginx >/dev/null 2>&1 || true
+docker exec wp-nginx chmod -R 775 /var/cache/nginx >/dev/null 2>&1 || true
+docker exec -u 0 wp-nginx sh -c 'rm -rf /var/cache/nginx/* 2>/dev/null || true'
 docker exec wp-nginx nginx -s reload 2>/dev/null || true
 log_ok "Caché FastCGI y memoria Redis vaciados."
 

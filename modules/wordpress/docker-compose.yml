@@ -3,7 +3,10 @@ services:
   # NGINX 1.27 - Reverse Proxy, FastCGI Cache & SSL Terminator
   # ============================================================================
   nginx:
-    image: nginx:1.27-alpine
+    build:
+      context: ./nginx
+      dockerfile: Dockerfile
+    image: se2code-nginx:1.27-alpine
     container_name: wp-nginx
     restart: unless-stopped
     ports:

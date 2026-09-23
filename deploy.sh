@@ -120,6 +120,8 @@ ENV_EOF
 
     log_step "Construyendo contenedores e inicializando servicios..."
     docker compose up -d --build
+    docker exec wp-nginx chown -R www-data:www-data /var/cache/nginx /var/log/nginx >/dev/null 2>&1 || true
+    docker exec wp-nginx chmod -R 775 /var/cache/nginx >/dev/null 2>&1 || true
 
     # Install Global WP-CLI Wrapper
     log_step "Instalando comando global 'wp' (WP-CLI)..."

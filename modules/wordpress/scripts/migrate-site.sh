@@ -492,6 +492,11 @@ if [[ "$DO_REPLACE" =~ ^[Ss]$ ]]; then
                 fi
             done
             docker exec -i --user 33:33 "$PHP_CONTAINER" wp elementor flush_css --path="$CONTAINER_PATH" >/dev/null 2>&1 || true
+            docker exec -i --user 33:33 "$PHP_CONTAINER" wp option update elementor_experiment-element-caching 'inactive' --path="$CONTAINER_PATH" >/dev/null 2>&1 || true
+            docker exec -i --user 33:33 "$PHP_CONTAINER" wp eval '
+            global $wpdb;
+            $wpdb->query("DELETE FROM " . $wpdb->prefix . "postmeta WHERE meta_key = \x27_elementor_element_cache\x27;");
+            ' --path="$CONTAINER_PATH" >/dev/null 2>&1 || true
         fi
 
         docker exec -i --user 33:33 "$PHP_CONTAINER" wp rewrite flush --path="$CONTAINER_PATH" >/dev/null 2>&1 || true

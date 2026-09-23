@@ -305,6 +305,11 @@ optimize_single_instance() {
     log_step "Optimizando Elementor y acondicionando permisos de caché FastCGI..."
     docker exec --user 33:33 "$PHP_CONTAINER" wp option update elementor_editor_break_frames 1 --path="$C_PATH" >/dev/null 2>&1 || true
     docker exec --user 33:33 "$PHP_CONTAINER" wp option update elementor_allow_tracking 'no' --path="$C_PATH" >/dev/null 2>&1 || true
+    docker exec --user 33:33 "$PHP_CONTAINER" wp option update elementor_experiment-element-caching 'inactive' --path="$C_PATH" >/dev/null 2>&1 || true
+    docker exec --user 33:33 "$PHP_CONTAINER" wp eval '
+    global $wpdb;
+    $wpdb->query("DELETE FROM " . $wpdb->prefix . "postmeta WHERE meta_key = \x27_elementor_element_cache\x27;");
+    ' --path="$C_PATH" >/dev/null 2>&1 || true
 
     log_step "Limpiando tareas fallidas de Action Scheduler..."
     docker exec --user 33:33 "$PHP_CONTAINER" wp eval '
@@ -346,7 +351,8 @@ done
 
 # Purgas globales de servidor
 log_section "PASO FINAL: RECARGA DE SERVICIOS Y PURGA GLOBAL"
-docker exec wp-nginx chmod -R 777 /var/cache/nginx >/dev/null 2>&1 || true
+docker exec wp-nginx chown -R www-data:www-data /var/cache/nginx /var/log/nginx >/dev/null 2>&1 || true
+docker exec wp-nginx chmod -R 775 /var/cache/nginx >/dev/null 2>&1 || true
 docker exec -u 0 wp-nginx sh -c 'rm -rf /var/cache/nginx/* 2>/dev/null || true'
 docker exec wp-nginx nginx -s reload 2>/dev/null || true
 docker restart "$PHP_CONTAINER" >/dev/null 2>&1 || true

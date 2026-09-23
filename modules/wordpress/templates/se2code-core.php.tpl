@@ -3,7 +3,7 @@
  * Plugin Name: se2Code Performance & Cloud Accelerator
  * Description: Elimina latencias de red, previene conflictos de caché, autoconfigura Nginx FastCGI + Redis y optimiza Elementor.
  * Author: se2Code
- * Version: 1.7.0
+ * Version: 1.8.0
  */
 
 if ( ! defined( 'ABSPATH' ) ) {
@@ -182,6 +182,24 @@ add_filter( 'script_loader_src', function( $src, $handle ) {
 // Desactivar telemetria de Elementor
 add_filter( 'elementor/tracker/send_tracking_data_params', '__return_empty_array' );
 
+// Desactivar Element Caching experimental (evita que guarde bloques HTML obsoletos en wp_postmeta)
+add_filter( 'pre_option_elementor_experiment-element-caching', function() {
+    return 'inactive';
+} );
+
+// Purgar fragmentos cacheados de Elementor en BD cuando se purga Nginx o al guardar contenido
+if ( ! function_exists( 'se2code_purge_elementor_element_cache' ) ) {
+    function se2code_purge_elementor_element_cache() {
+        global $wpdb;
+        if ( isset( $wpdb->postmeta ) ) {
+            $wpdb->query( "DELETE FROM {$wpdb->postmeta} WHERE meta_key = '_elementor_element_cache'" );
+        }
+    }
+}
+add_action( 'rt_wp_nginx_helper_after_fastcgi_purge', 'se2code_purge_elementor_element_cache' );
+add_action( 'elementor/editor/after_save', 'se2code_purge_elementor_element_cache' );
+add_action( 'save_post', 'se2code_purge_elementor_element_cache' );
+
 // ==============================================================================
 // 4. PERMISOS Y CAPACIDADES DE NGINX HELPER (Soluciona "No estás autorizado")
 // ==============================================================================
@@ -329,5 +347,11 @@ add_action( 'init', function() {
     $plugin_dropin = WP_CONTENT_DIR . '/plugins/redis-cache/includes/object-cache.php';
     if ( ! file_exists( $dropin_path ) && file_exists( $plugin_dropin ) ) {
         @copy( $plugin_dropin, $dropin_path );
+    }
+
+    // C. Asegurar que Element Caching esté inactivo en opciones y purgado
+    if ( 'active' === get_option( 'elementor_experiment-element-caching' ) ) {
+        update_option( 'elementor_experiment-element-caching', 'inactive' );
+        se2code_purge_elementor_element_cache();
     }
 } );

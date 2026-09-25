@@ -15,6 +15,16 @@ STACK_ROOT="$(cd "$(dirname "$REAL_SCRIPT")/.." && pwd)"
 # Soporte para subcomandos directos por línea de comandos (CLI)
 if [ $# -gt 0 ]; then
     case "$1" in
+        landing|add-landing)
+            shift
+            bash "$STACK_ROOT/modules/wordpress/scripts/add-landing.sh" "$@"
+            exit $?
+            ;;
+        add-site)
+            shift
+            bash "$STACK_ROOT/modules/wordpress/scripts/add-site.sh" "$@"
+            exit $?
+            ;;
         pma|phpmyadmin)
             shift
             bash "$STACK_ROOT/modules/wordpress/scripts/manage-pma.sh" "$@"
@@ -74,9 +84,22 @@ source "$STACK_ROOT/core/hardware.sh"
 while true; do
     show_banner
     
-    # 1. Conteo inteligente: WordPress vs Aplicaciones Proxy
-    WP_SITES_COUNT=$(grep -l "fastcgi_pass" "$STACK_ROOT/modules/wordpress/nginx/conf.d"/*.conf 2>/dev/null | wc -l | tr -d ' ')
-    APPS_COUNT=$(grep -l "proxy_pass" "$STACK_ROOT/modules/wordpress/nginx/conf.d"/*.conf 2>/dev/null | wc -l | tr -d ' ')
+    # 1. Conteo inteligente: WordPress vs Landing Pages vs Aplicaciones Proxy
+    TOTAL_WP_COUNT=0
+    LANDING_COUNT=0
+    APPS_COUNT=0
+
+    for conf in "$STACK_ROOT/modules/wordpress/nginx/conf.d"/*.conf; do
+        [ -f "$conf" ] || continue
+        [[ "$conf" =~ default ]] && continue
+        if grep -q "proxy_pass" "$conf"; then
+            APPS_COUNT=$((APPS_COUNT + 1))
+        elif grep -qi "\(Landing Page" "$conf"; then
+            LANDING_COUNT=$((LANDING_COUNT + 1))
+        else
+            TOTAL_WP_COUNT=$((TOTAL_WP_COUNT + 1))
+        fi
+    done
     
     # 2. Detección en vivo de phpMyAdmin
     PMA_RUNNING=false
@@ -91,7 +114,10 @@ while true; do
     fi
 
     # Barra de estado dinámica
-    STATUS_LINE="  ${C_BOLD}ESTADO:${C_RESET} Sitios WordPress: ${C_GREEN}${WP_SITES_COUNT}${C_RESET}"
+    STATUS_LINE="  ${C_BOLD}ESTADO:${C_RESET} Sitios WordPress: ${C_GREEN}${TOTAL_WP_COUNT}${C_RESET}"
+    if [ "$LANDING_COUNT" -gt 0 ]; then
+        STATUS_LINE="${STATUS_LINE} | Landing Pages: ${C_GREEN}${LANDING_COUNT}${C_RESET}"
+    fi
     if [ "$APPS_COUNT" -gt 0 ]; then
         STATUS_LINE="${STATUS_LINE} | Apps: ${C_CYAN}${APPS_COUNT}${C_RESET}"
     fi
@@ -105,37 +131,38 @@ while true; do
     echo -e "$STATUS_LINE"
     echo -e "${C_CYAN}================================================================${C_RESET}"
 
-    # Menú de WordPress
-    echo -e "  ${C_BOLD}${C_CYAN}[ GESTIÓN DE WORDPRESS ]${C_RESET}"
-    echo -e "  1) 📋 Listar todos los sitios WordPress instalados"
+    # Menú de Sitios Web y WordPress
+    echo -e "  ${C_BOLD}${C_CYAN}[ GESTIÓN DE SITIOS WEB & WORDPRESS ]${C_RESET}"
+    echo -e "  1) 📋 Listar todos los sitios y landing pages instalados"
     echo -e "  2) ➕ Crear nuevo sitio WordPress (Desde cero / Descarga oficial)"
-    echo -e "  3) 📥 Migrar / Importar Sitio Existente (.tar.gz + .sql + search-replace)"
-    echo -e "  4) 🌍 Agregar sub-sitio / idioma a un sitio existente (ej: /es, /en)"
-    echo -e "  5) 🗑️  Eliminar un sitio (con backup automático previo)"
-    echo -e "  6) 🔄 Cambiar versión de PHP de un sitio (8.4 ↔ 8.5)"
-    echo -e "  7) 🔒 Gestión de Certificados SSL (Cloudflare / Let's Encrypt / Autofirmado)"
-    echo -e "  8) 💾 Respaldos Granulares (Base de datos, Archivos o Full)"
-    echo -e "  9) 🧹 Purgar Cachés del Servidor (FastCGI Cache + Redis)"
-    echo -e " 10) 🚀 Optimizar Sitio Existente (Redis + Nginx Helper + Anti-Conflictos)"
-    echo -e " 11) 🔗 Reemplazo Canónico de URLs (4 Variantes ➔ 1 Sola URL & Elementor)"
-    echo -e " 12) 🗄️  phpMyAdmin (Gestor Web de Bases de Datos - Iniciar / Detener / Reset Pass)"
+    echo -e "  3) 🚀 Crear Landing Page Básica (HTML/CSS/JS - Sin Base de Datos)"
+    echo -e "  4) 📥 Migrar / Importar Sitio Existente (.tar.gz + .sql + search-replace)"
+    echo -e "  5) 🌍 Agregar sub-sitio / idioma a un sitio existente (ej: /es, /en)"
+    echo -e "  6) 🗑️  Eliminar un sitio o landing page (con backup automático previo)"
+    echo -e "  7) 🔄 Cambiar versión de PHP de un sitio (8.4 ↔ 8.5)"
+    echo -e "  8) 🔒 Gestión de Certificados SSL (Cloudflare / Let's Encrypt / Autofirmado)"
+    echo -e "  9) 💾 Respaldos Granulares (Base de datos, Archivos o Full)"
+    echo -e " 10) 🧹 Purgar Cachés del Servidor (FastCGI Cache + Redis)"
+    echo -e " 11) 🚀 Optimizar Sitio Existente (Redis + Nginx Helper + Anti-Conflictos)"
+    echo -e " 12) 🔗 Reemplazo Canónico de URLs (4 Variantes ➔ 1 Sola URL & Elementor)"
+    echo -e " 13) 🗄️  phpMyAdmin (Gestor Web de Bases de Datos - Iniciar / Detener / Reset Pass)"
     echo -e ""
 
     # Menú condicional de WireGuard y Sistema
     if [ "$WG_RUNNING" = true ]; then
         echo -e "  ${C_BOLD}${C_CYAN}[ GESTIÓN DE WIREGUARD VPN (Activo ✔) ]${C_RESET}"
-        echo -e " 13) 📱 Mostrar Código QR para Celular (Peer 1)"
-        echo -e " 14) 👥 Ver conexiones activas y estado del túnel"
-        echo -e " 15) ⏹️  Detener WireGuard VPN"
+        echo -e " 14) 📱 Mostrar Código QR para Celular (Peer 1)"
+        echo -e " 15) 👥 Ver conexiones activas y estado del túnel"
+        echo -e " 16) ⏹️  Detener WireGuard VPN"
         echo -e ""
         echo -e "  ${C_BOLD}${C_CYAN}[ SISTEMA Y SEGURIDAD ]${C_RESET}"
-        echo -e " 16) 🛡️  Securización y Hardening del Servidor (Usuario sudo, SSH, UFW, Fail2ban, Kernel)"
-        echo -e " 17) 📊 Diagnóstico de Hardware y Memoria en vivo"
-        echo -e " 18) 🛡️  Activar / Ajustar Escudo de Memoria Swap"
-        echo -e " 19) ❌ Salir"
+        echo -e " 17) 🛡️  Securización y Hardening del Servidor (Usuario sudo, SSH, UFW, Fail2ban, Kernel)"
+        echo -e " 18) 📊 Diagnóstico de Hardware y Memoria en vivo"
+        echo -e " 19) 🛡️  Activar / Ajustar Escudo de Memoria Swap"
+        echo -e " 20) ❌ Salir"
         echo -e "${C_CYAN}================================================================${C_RESET}"
 
-        read -r -p "Selecciona una opción [1-19]: " MENU_CHOICE
+        read -r -p "Selecciona una opción [1-20]: " MENU_CHOICE
 
         case "$MENU_CHOICE" in
             1)
@@ -147,30 +174,34 @@ while true; do
                 read -r -p "Presiona ENTER para volver al menú..." _
                 ;;
             3)
-                bash "$STACK_ROOT/modules/wordpress/scripts/migrate-site.sh"
+                bash "$STACK_ROOT/modules/wordpress/scripts/add-landing.sh"
                 read -r -p "Presiona ENTER para volver al menú..." _
                 ;;
             4)
-                bash "$STACK_ROOT/modules/wordpress/scripts/add-subsite.sh"
+                bash "$STACK_ROOT/modules/wordpress/scripts/migrate-site.sh"
                 read -r -p "Presiona ENTER para volver al menú..." _
                 ;;
             5)
-                bash "$STACK_ROOT/modules/wordpress/scripts/remove-site.sh"
+                bash "$STACK_ROOT/modules/wordpress/scripts/add-subsite.sh"
                 read -r -p "Presiona ENTER para volver al menú..." _
                 ;;
             6)
-                bash "$STACK_ROOT/modules/wordpress/scripts/switch-php.sh"
+                bash "$STACK_ROOT/modules/wordpress/scripts/remove-site.sh"
                 read -r -p "Presiona ENTER para volver al menú..." _
                 ;;
             7)
-                bash "$STACK_ROOT/modules/wordpress/scripts/manage-ssl.sh"
+                bash "$STACK_ROOT/modules/wordpress/scripts/switch-php.sh"
                 read -r -p "Presiona ENTER para volver al menú..." _
                 ;;
             8)
-                bash "$STACK_ROOT/modules/wordpress/scripts/backup-site.sh"
+                bash "$STACK_ROOT/modules/wordpress/scripts/manage-ssl.sh"
                 read -r -p "Presiona ENTER para volver al menú..." _
                 ;;
             9)
+                bash "$STACK_ROOT/modules/wordpress/scripts/backup-site.sh"
+                read -r -p "Presiona ENTER para volver al menú..." _
+                ;;
+            10)
                 log_step "Purgando Caché FastCGI y Redis..."
                 sudo rm -rf /var/cache/nginx/* 2>/dev/null || true
                 docker exec wp-nginx rm -rf /var/cache/nginx/* 2>/dev/null || true
@@ -179,28 +210,128 @@ while true; do
                 log_ok "Caché de páginas FastCGI y memoria Redis vaciados por completo."
                 read -r -p "Presiona ENTER para volver al menú..." _
                 ;;
-            10)
+            11)
                 bash "$STACK_ROOT/modules/wordpress/scripts/optimize-site.sh"
                 read -r -p "Presiona ENTER para volver al menú..." _
                 ;;
-            11)
+            12)
                 bash "$STACK_ROOT/modules/wordpress/scripts/replace-urls.sh"
                 read -r -p "Presiona ENTER para volver al menú..." _
                 ;;
-            12)
+            13)
+                bash "$STACK_ROOT/modules/wordpress/scripts/manage-pma.sh"
+                read -r -p "Presiona ENTER para volver al menú..." _
+                ;;
+            14)
                 echo -e "\n${C_BOLD}${C_GREEN}📱 Código QR de WireGuard (Peer 1 Móvil):${C_RESET}\n"
                 qrencode -t ansiutf8 < "$STACK_ROOT/modules/wireguard/config/peer1/peer1.conf"
                 read -r -p "Presiona ENTER para volver al menú..." _
                 ;;
-            13)
+            15)
                 echo -e "\n${C_BOLD}--- Conexiones Activas de WireGuard VPN ---${C_RESET}"
                 docker exec wireguard wg show 2>/dev/null || log_warn "El contenedor de WireGuard no está corriendo."
                 read -r -p "Presiona ENTER para volver al menú..." _
                 ;;
-            14)
+            16)
                 log_step "Deteniendo servicio WireGuard VPN..."
                 docker compose -f "$STACK_ROOT/modules/wireguard/docker-compose.yml" down >/dev/null 2>&1 || docker stop wireguard >/dev/null 2>&1 || true
                 log_ok "WireGuard VPN detenido."
+                read -r -p "Presiona ENTER para volver al menú..." _
+                ;;
+            17)
+                bash "$STACK_ROOT/core/hardening.sh"
+                read -r -p "Presiona ENTER para volver al menú..." _
+                ;;
+            18)
+                show_hardware_diagnostics
+                read -r -p "Presiona ENTER para volver al menú..." _
+                ;;
+            19)
+                create_swap_shield 2
+                read -r -p "Presiona ENTER para volver al menú..." _
+                ;;
+            20|q|Q)
+                echo -e "\n${C_CYAN}¡Hasta pronto! Gracias por usar se2Code Stack.${C_RESET}\n"
+                exit 0
+                ;;
+            *)
+                log_warn "Opción inválida."
+                sleep 1
+                ;;
+        esac
+    else
+        echo -e "  ${C_BOLD}${C_CYAN}[ MÓDULOS OPCIONALES ]${C_RESET}"
+        echo -e " 14) 🛡️  Instalar y Configurar WireGuard VPN"
+        echo -e ""
+        echo -e "  ${C_BOLD}${C_CYAN}[ SISTEMA Y SEGURIDAD ]${C_RESET}"
+        echo -e " 15) 🛡️  Securización y Hardening del Servidor (Usuario sudo, SSH, UFW, Fail2ban, Kernel)"
+        echo -e " 16) 📊 Diagnóstico de Hardware y Memoria en vivo"
+        echo -e " 17) 🛡️  Activar / Ajustar Escudo de Memoria Swap"
+        echo -e " 18) ❌ Salir"
+        echo -e "${C_CYAN}================================================================${C_RESET}"
+
+        read -r -p "Selecciona una opción [1-18]: " MENU_CHOICE
+
+        case "$MENU_CHOICE" in
+            1)
+                bash "$STACK_ROOT/modules/wordpress/scripts/list-sites.sh"
+                read -r -p "Presiona ENTER para volver al menú..." _
+                ;;
+            2)
+                bash "$STACK_ROOT/modules/wordpress/scripts/add-site.sh"
+                read -r -p "Presiona ENTER para volver al menú..." _
+                ;;
+            3)
+                bash "$STACK_ROOT/modules/wordpress/scripts/add-landing.sh"
+                read -r -p "Presiona ENTER para volver al menú..." _
+                ;;
+            4)
+                bash "$STACK_ROOT/modules/wordpress/scripts/migrate-site.sh"
+                read -r -p "Presiona ENTER para volver al menú..." _
+                ;;
+            5)
+                bash "$STACK_ROOT/modules/wordpress/scripts/add-subsite.sh"
+                read -r -p "Presiona ENTER para volver al menú..." _
+                ;;
+            6)
+                bash "$STACK_ROOT/modules/wordpress/scripts/remove-site.sh"
+                read -r -p "Presiona ENTER para volver al menú..." _
+                ;;
+            7)
+                bash "$STACK_ROOT/modules/wordpress/scripts/switch-php.sh"
+                read -r -p "Presiona ENTER para volver al menú..." _
+                ;;
+            8)
+                bash "$STACK_ROOT/modules/wordpress/scripts/manage-ssl.sh"
+                read -r -p "Presiona ENTER para volver al menú..." _
+                ;;
+            9)
+                bash "$STACK_ROOT/modules/wordpress/scripts/backup-site.sh"
+                read -r -p "Presiona ENTER para volver al menú..." _
+                ;;
+            10)
+                log_step "Purgando Caché FastCGI y Redis..."
+                sudo rm -rf /var/cache/nginx/* 2>/dev/null || true
+                docker exec wp-nginx rm -rf /var/cache/nginx/* 2>/dev/null || true
+                docker exec redis redis-cli FLUSHALL >/dev/null 2>&1 || true
+                docker exec wp-nginx nginx -s reload 2>/dev/null || true
+                log_ok "Caché de páginas FastCGI y memoria Redis vaciados por completo."
+                read -r -p "Presiona ENTER para volver al menú..." _
+                ;;
+            11)
+                bash "$STACK_ROOT/modules/wordpress/scripts/optimize-site.sh"
+                read -r -p "Presiona ENTER para volver al menú..." _
+                ;;
+            12)
+                bash "$STACK_ROOT/modules/wordpress/scripts/replace-urls.sh"
+                read -r -p "Presiona ENTER para volver al menú..." _
+                ;;
+            13)
+                bash "$STACK_ROOT/modules/wordpress/scripts/manage-pma.sh"
+                read -r -p "Presiona ENTER para volver al menú..." _
+                ;;
+            14)
+                bash "$STACK_ROOT/modules/wireguard/setup-vpn.sh"
                 read -r -p "Presiona ENTER para volver al menú..." _
                 ;;
             15)
@@ -216,98 +347,6 @@ while true; do
                 read -r -p "Presiona ENTER para volver al menú..." _
                 ;;
             18|q|Q)
-                echo -e "\n${C_CYAN}¡Hasta pronto! Gracias por usar se2Code Stack.${C_RESET}\n"
-                exit 0
-                ;;
-            *)
-                log_warn "Opción inválida."
-                sleep 1
-                ;;
-        esac
-    else
-        echo -e "  ${C_BOLD}${C_CYAN}[ MÓDULOS OPCIONALES ]${C_RESET}"
-        echo -e " 13) 🛡️  Instalar y Configurar WireGuard VPN"
-        echo -e ""
-        echo -e "  ${C_BOLD}${C_CYAN}[ SISTEMA Y SEGURIDAD ]${C_RESET}"
-        echo -e " 14) 🛡️  Securización y Hardening del Servidor (Usuario sudo, SSH, UFW, Fail2ban, Kernel)"
-        echo -e " 15) 📊 Diagnóstico de Hardware y Memoria en vivo"
-        echo -e " 16) 🛡️  Activar / Ajustar Escudo de Memoria Swap"
-        echo -e " 17) ❌ Salir"
-        echo -e "${C_CYAN}================================================================${C_RESET}"
-
-        read -r -p "Selecciona una opción [1-17]: " MENU_CHOICE
-
-        case "$MENU_CHOICE" in
-            1)
-                bash "$STACK_ROOT/modules/wordpress/scripts/list-sites.sh"
-                read -r -p "Presiona ENTER para volver al menú..." _
-                ;;
-            2)
-                bash "$STACK_ROOT/modules/wordpress/scripts/add-site.sh"
-                read -r -p "Presiona ENTER para volver al menú..." _
-                ;;
-            3)
-                bash "$STACK_ROOT/modules/wordpress/scripts/migrate-site.sh"
-                read -r -p "Presiona ENTER para volver al menú..." _
-                ;;
-            4)
-                bash "$STACK_ROOT/modules/wordpress/scripts/add-subsite.sh"
-                read -r -p "Presiona ENTER para volver al menú..." _
-                ;;
-            5)
-                bash "$STACK_ROOT/modules/wordpress/scripts/remove-site.sh"
-                read -r -p "Presiona ENTER para volver al menú..." _
-                ;;
-            6)
-                bash "$STACK_ROOT/modules/wordpress/scripts/switch-php.sh"
-                read -r -p "Presiona ENTER para volver al menú..." _
-                ;;
-            7)
-                bash "$STACK_ROOT/modules/wordpress/scripts/manage-ssl.sh"
-                read -r -p "Presiona ENTER para volver al menú..." _
-                ;;
-            8)
-                bash "$STACK_ROOT/modules/wordpress/scripts/backup-site.sh"
-                read -r -p "Presiona ENTER para volver al menú..." _
-                ;;
-            9)
-                log_step "Purgando Caché FastCGI y Redis..."
-                sudo rm -rf /var/cache/nginx/* 2>/dev/null || true
-                docker exec wp-nginx rm -rf /var/cache/nginx/* 2>/dev/null || true
-                docker exec redis redis-cli FLUSHALL >/dev/null 2>&1 || true
-                docker exec wp-nginx nginx -s reload 2>/dev/null || true
-                log_ok "Caché de páginas FastCGI y memoria Redis vaciados por completo."
-                read -r -p "Presiona ENTER para volver al menú..." _
-                ;;
-            10)
-                bash "$STACK_ROOT/modules/wordpress/scripts/optimize-site.sh"
-                read -r -p "Presiona ENTER para volver al menú..." _
-                ;;
-            11)
-                bash "$STACK_ROOT/modules/wordpress/scripts/replace-urls.sh"
-                read -r -p "Presiona ENTER para volver al menú..." _
-                ;;
-            12)
-                bash "$STACK_ROOT/modules/wordpress/scripts/manage-pma.sh"
-                read -r -p "Presiona ENTER para volver al menú..." _
-                ;;
-            13)
-                bash "$STACK_ROOT/modules/wireguard/setup-vpn.sh"
-                read -r -p "Presiona ENTER para volver al menú..." _
-                ;;
-            14)
-                bash "$STACK_ROOT/core/hardening.sh"
-                read -r -p "Presiona ENTER para volver al menú..." _
-                ;;
-            15)
-                show_hardware_diagnostics
-                read -r -p "Presiona ENTER para volver al menú..." _
-                ;;
-            16)
-                create_swap_shield 2
-                read -r -p "Presiona ENTER para volver al menú..." _
-                ;;
-            17|q|Q)
                 echo -e "\n${C_CYAN}¡Hasta pronto! Gracias por usar se2Code Stack.${C_RESET}\n"
                 exit 0
                 ;;

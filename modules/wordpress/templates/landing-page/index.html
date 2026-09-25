@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{DOMAIN}} — Landing Page Oficial</title>
+  <meta name="description" content="Bienvenido a {{DOMAIN}}. Landing page ultrarrápida, optimizada y de alta conversión alojada en se2Code Stack.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="assets/css/style.css">
+</head>
+<body>
+  <!-- Background Glow Effects -->
+  <div class="glow-bg glow-1"></div>
+  <div class="glow-bg glow-2"></div>
+
+  <!-- Header / Navbar -->
+  <header class="site-header">
+    <div class="container nav-container">
+      <a href="#" class="logo">
+        <span class="logo-icon">⚡</span>
+        <span class="logo-text">{{DOMAIN}}</span>
+      </a>
+      <nav class="nav-links">
+        <a href="#beneficios">Beneficios</a>
+        <a href="#contacto">Contacto</a>
+        <a href="#faq">Preguntas</a>
+      </nav>
+      <a href="#contacto" class="btn btn-sm btn-primary">Empezar Ahora</a>
+    </div>
+  </header>
+
+  <!-- Hero Section -->
+  <section class="hero">
+    <div class="container hero-container">
+      <div class="badge">
+        <span class="badge-dot"></span>
+        <span>Acelerado por se2Code Stack · 100/100 PageSpeed</span>
+      </div>
+      <h1 class="hero-title">
+        Convierte Visitas en Clientes con una <span class="gradient-text">Velocidad Imparable</span>
+      </h1>
+      <p class="hero-desc">
+        Esta landing page fue aprovisionada de forma instantánea sin la complejidad ni sobrecostes de bases de datos. Diseñada para cargar en menos de 0.2 segundos y maximizar conversiones.
+      </p>
+      <div class="hero-actions">
+        <a href="#contacto" class="btn btn-primary btn-lg">Solicitar Información 🚀</a>
+        <a href="#beneficios" class="btn btn-outline btn-lg">Conocer Beneficios</a>
+      </div>
+
+      <!-- Métricas / Trust -->
+      <div class="metrics-grid">
+        <div class="metric-card">
+          <span class="metric-value">&lt; 0.2s</span>
+          <span class="metric-label">Tiempo de Carga</span>
+        </div>
+        <div class="metric-card">
+          <span class="metric-value">100%</span>
+          <span class="metric-label">Rendimiento Nginx</span>
+        </div>
+        <div class="metric-card">
+          <span class="metric-value">99.99%</span>
+          <span class="metric-label">Disponibilidad Activa</span>
+        </div>
+        <div class="metric-card">
+          <span class="metric-value">SSL / TLS</span>
+          <span class="metric-label">Seguridad Cifrada</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Beneficios / Features -->
+  <section id="beneficios" class="features section-padding">
+    <div class="container">
+      <div class="section-header">
+        <span class="section-tag">¿Por qué este formato?</span>
+        <h2 class="section-title">Diseñado para la Máxima Eficiencia</h2>
+        <p class="section-desc">Elimina cuellos de botella y ofrece una experiencia instantánea a tus usuarios.</p>
+      </div>
+
+      <div class="features-grid">
+        <div class="feature-card">
+          <div class="feature-icon">⚡</div>
+          <h3>Carga Ultrarrápida</h3>
+          <p>Servido directamente por Nginx 1.27 desde memoria RAM y almacenamiento NVMe, sin latencias de bases de datos.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">🛡️</div>
+          <h3>Cero Mantenimiento</h3>
+          <p>Sin riesgos de inyección SQL ni vulnerabilidades de plugins pesados. Tu página funciona 24/7 sin sorpresas.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">🎯</div>
+          <h3>Alta Tasa de Conversión</h3>
+          <p>Diseño enfocado en la retención del visitante, compatible con Google Ads, Facebook Ads y campañas de captación.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Formulario de Contacto / Lead Capture -->
+  <section id="contacto" class="contact section-padding">
+    <div class="container contact-container">
+      <div class="contact-info">
+        <span class="section-tag">Ponte en Contacto</span>
+        <h2 class="section-title">¿Listo para Impulsar tus Resultados?</h2>
+        <p class="section-desc">
+          Completa el siguiente formulario y nos pondremos en contacto contigo a la brevedad posible.
+        </p>
+        <ul class="contact-perks">
+          <li>✔ Atención personalizada y respuesta rápida.</li>
+          <li>✔ Asesoría a medida para tus objetivos comerciales.</li>
+          <li>✔ Total privacidad y confidencialidad en tus datos.</li>
+        </ul>
+      </div>
+
+      <div class="contact-form-card">
+        <form id="leadForm" class="contact-form" action="contact.php" method="POST">
+          <div class="form-group">
+            <label for="name">Nombre Completo</label>
+            <input type="text" id="name" name="name" required placeholder="Tu nombre o empresa">
+          </div>
+          <div class="form-group">
+            <label for="email">Correo Electrónico</label>
+            <input type="email" id="email" name="email" required placeholder="tu@email.com">
+          </div>
+          <div class="form-group">
+            <label for="phone">Teléfono / WhatsApp</label>
+            <input type="tel" id="phone" name="phone" placeholder="+57 300 000 0000">
+          </div>
+          <div class="form-group">
+            <label for="message">Mensaje o Consulta</label>
+            <textarea id="message" name="message" rows="4" required placeholder="¿En qué podemos ayudarte?"></textarea>
+          </div>
+          <button type="submit" id="submitBtn" class="btn btn-primary btn-block">
+            <span class="btn-text">Enviar Mensaje</span>
+            <span class="btn-loader" style="display:none;">Enviando...</span>
+          </button>
+          <div id="formFeedback" class="form-feedback" style="display:none;"></div>
+        </form>
+      </div>
+    </div>
+  </section>
+
+  <!-- Preguntas Frecuentes (FAQ) -->
+  <section id="faq" class="faq section-padding">
+    <div class="container faq-container">
+      <div class="section-header">
+        <span class="section-tag">Preguntas Frecuentes</span>
+        <h2 class="section-title">Todo lo que necesitas saber</h2>
+      </div>
+
+      <div class="accordion">
+        <div class="accordion-item">
+          <button class="accordion-header">
+            <span>¿Cómo puedo personalizar el diseño de esta landing page?</span>
+            <span class="accordion-icon">+</span>
+          </button>
+          <div class="accordion-content">
+            <p>Puedes editar directamente los archivos <code>index.html</code>, <code>assets/css/style.css</code> y <code>assets/js/main.js</code> conectándote por SFTP, SSH o desplegando tu repositorio con Git.</p>
+          </div>
+        </div>
+
+        <div class="accordion-item">
+          <button class="accordion-header">
+            <span>¿A dónde llegan los mensajes del formulario de contacto?</span>
+            <span class="accordion-icon">+</span>
+          </button>
+          <div class="accordion-content">
+            <p>El archivo <code>contact.php</code> procesa los mensajes de forma segura. Puedes configurarlo para enviar correos a tu bandeja o conectarlo con Webhooks de Make, Zapier o tu CRM.</p>
+          </div>
+        </div>
+
+        <div class="accordion-item">
+          <button class="accordion-header">
+            <span>¿Esta landing page incluye certificado SSL/TLS?</span>
+            <span class="accordion-icon">+</span>
+          </button>
+          <div class="accordion-content">
+            <p>Sí, la landing page se entrega con soporte completo para HTTPS, ya sea mediante certificados Cloudflare Origin CA o Let's Encrypt automático vía se2Code Stack.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer class="site-footer">
+    <div class="container footer-container">
+      <p>&copy; 2026 {{DOMAIN}}. Todos los derechos reservados.</p>
+      <p class="footer-credit">Alojado con alto rendimiento en <strong>se2Code Stack Server</strong>.</p>
+    </div>
+  </footer>
+
+  <script src="assets/js/main.js"></script>
+</body>
+</html>

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ==============================================================================
-# se2Code Stack Server - WordPress: Motor de Backups Granulares (Soporta Multilenguaje)
+# se2Code Stack Server - Motor de Backups Granulares (WordPress y Landing Pages)
 # ==============================================================================
 set -euo pipefail
 
@@ -18,16 +18,20 @@ BACKUP_TYPE="${2:-}"
 if [ -z "$SITE_SLUG" ]; then
     echo -e "\n${C_BOLD}${C_CYAN}--- Módulo de Backups: Selecciona el Sitio ---${C_RESET}"
     
-    # Listar sitios activos
-    SITES=($(ls -1 "$STACK_ROOT"/php/php*/pools/*.conf 2>/dev/null | xargs -n 1 basename | sed 's/\.conf$//' | grep -v "placeholder" || true))
-    if [ ${#SITES[@]} -eq 0 ]; then
+    # Listar todos los sitios activos a partir de los vhosts de NGINX
+    CONF_FILES=($(find "$STACK_ROOT/nginx/conf.d" -maxdepth 1 -type f -name "*.conf" ! -name "default*.conf" 2>/dev/null | sort || true))
+    if [ ${#CONF_FILES[@]} -eq 0 ]; then
         log_error "No se detectaron sitios activos en el stack."
         exit 1
     fi
 
+    SITES=()
     i=1
-    for s in "${SITES[@]}"; do
-        echo "  $i) $s"
+    for conf in "${CONF_FILES[@]}"; do
+        s=$(basename "$conf" .conf)
+        SITES+=("$s")
+        dom=$(grep -E "^\s*server_name\s+" "$conf" | head -n 1 | awk '{print $2}' | tr -d ';' || echo "$s")
+        echo "  $i) $s ($dom)"
         i=$((i + 1))
     done
     echo "  $i) TODOS LOS SITIOS"
@@ -44,8 +48,8 @@ fi
 # 2. Seleccionar tipo de backup
 if [ -z "$BACKUP_TYPE" ]; then
     echo -e "\n${C_BOLD}[?] ¿Qué tipo de respaldo deseas generar?${C_RESET}"
-    echo -e "    1) 📦 Backup COMPLETO (Todas las Bases de datos + Archivos web)"
-    echo -e "    2) 🗄️  Solo Bases de Datos (.sql.gz de todas las instancias del sitio)"
+    echo -e "    1) 📦 Backup COMPLETO (Bases de datos + Archivos web)"
+    echo -e "    2) 🗄️  Solo Bases de Datos (.sql.gz de las instancias)"
     echo -e "    3) 📁 Solo Archivos Web (.tar.gz sin cachés)"
     read -r -p "Opción [1-3]: " TYPE_OPT
     case "$TYPE_OPT" in
@@ -64,24 +68,30 @@ do_single_backup() {
 
     log_step "Generando respaldo de [$SLUG] (Tipo: $TYPE)..."
 
-    # Bases de datos (Detecta automáticamente si tiene sub-bases de datos por idioma)
+    # Bases de datos (si existen)
     if [ "$TYPE" = "full" ] || [ "$TYPE" = "db" ]; then
         MARIADB_ROOT_PASS=$(grep -E "^MYSQL_ROOT_PASSWORD=" "$STACK_ROOT/.env" 2>/dev/null | cut -d= -f2 || echo "root_secret")
         
         # Buscar todas las bases de datos del sitio (ej: wp_misitio_db, wp_misitio_es_db, etc.)
         MATCHED_DBS=$(docker exec mariadb mariadb -u root -p"$MARIADB_ROOT_PASS" --skip-ssl -e "SHOW DATABASES LIKE 'wp\_${SLUG}\_%';" 2>/dev/null | grep -E "^wp_${SLUG}_" || true)
         
-        if [ -z "$MATCHED_DBS" ]; then
-            MATCHED_DBS="wp_${SLUG}_db"
+        # Verificar también si existe base exacta wp_${SLUG}_db
+        EXACT_DB=$(docker exec mariadb mariadb -u root -p"$MARIADB_ROOT_PASS" --skip-ssl -e "SHOW DATABASES LIKE 'wp\_${SLUG}\_db';" 2>/dev/null | grep -E "^wp_${SLUG}_db" || true)
+        if [ -n "$EXACT_DB" ] && ! echo "$MATCHED_DBS" | grep -q "^wp_${SLUG}_db$"; then
+            MATCHED_DBS="${MATCHED_DBS} wp_${SLUG}_db"
         fi
 
-        for current_db in $MATCHED_DBS; do
-            DB_FILE="$TARGET_DIR/${current_db}_${DATE_TAG}.sql.gz"
-            log_info "Exportando y comprimiendo base de datos ($current_db)..."
-            docker exec mariadb mariadb-dump -u root -p"$MARIADB_ROOT_PASS" --skip-ssl --single-transaction --quick "$current_db" 2>/dev/null | gzip > "$DB_FILE"
-            DB_SIZE=$(du -h "$DB_FILE" | cut -f1)
-            log_ok "Base de datos respaldada: $(basename "$DB_FILE") ($DB_SIZE)"
-        done
+        if [ -n "$MATCHED_DBS" ]; then
+            for current_db in $MATCHED_DBS; do
+                DB_FILE="$TARGET_DIR/${current_db}_${DATE_TAG}.sql.gz"
+                log_info "Exportando y comprimiendo base de datos ($current_db)..."
+                docker exec mariadb mariadb-dump -u root -p"$MARIADB_ROOT_PASS" --skip-ssl --single-transaction --quick "$current_db" 2>/dev/null | gzip > "$DB_FILE"
+                DB_SIZE=$(du -h "$DB_FILE" | cut -f1)
+                log_ok "Base de datos respaldada: $(basename "$DB_FILE") ($DB_SIZE)"
+            done
+        else
+            log_info "El sitio [$SLUG] no tiene bases de datos MariaDB (Landing Page o estático). Omitiendo SQL."
+        fi
     fi
 
     # Archivos Web
@@ -108,8 +118,9 @@ do_single_backup() {
 }
 
 if [ "$SITE_SLUG" = "ALL" ]; then
-    SITES=($(ls -1 "$STACK_ROOT"/php/php*/pools/*.conf 2>/dev/null | xargs -n 1 basename | sed 's/\.conf$//' | grep -v "placeholder" || true))
-    for s in "${SITES[@]}"; do
+    CONF_FILES=($(find "$STACK_ROOT/nginx/conf.d" -maxdepth 1 -type f -name "*.conf" ! -name "default*.conf" 2>/dev/null | sort || true))
+    for conf in "${CONF_FILES[@]}"; do
+        s=$(basename "$conf" .conf)
         do_single_backup "$s" "$BACKUP_TYPE"
     done
 else

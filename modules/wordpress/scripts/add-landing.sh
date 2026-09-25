@@ -259,7 +259,7 @@ echo -e "${C_BOLD}${C_GREEN}      ¡LANDING PAGE CREADA EXITOSAMENTE CON SE2CODE
 echo -e "${C_GREEN}======================================================================${C_RESET}\n"
 echo -e "  - URL Oficial     : ${C_BOLD}${C_CYAN}https://${DOMAIN}${C_RESET}"
 echo -e "  - Slug del Sitio  : ${C_YELLOW}${SITE_SLUG}${C_RESET}"
-echo -e "  - Directorio Web  : ${C_WHITE}${SITE_WEB_DIR}${C_RESET}"
+echo -e "  - Directorio Web  : ${C_WHITE:-\033[38;5;255m}${SITE_WEB_DIR}${C_RESET}"
 echo -e "  - Base de Datos   : ${C_GREEN}Ninguna (0 MB RAM / Cero sobrecostos)${C_RESET}"
 if [ "$ENABLE_PHP" = "yes" ]; then
     echo -e "  - Soporte PHP     : ${C_GREEN}PHP 8.4 Habilitado (Pool puerto TCP ${PHP_PORT})${C_RESET}"

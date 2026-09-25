@@ -14,6 +14,7 @@ C_YELLOW="\033[38;5;220m"
 C_RED="\033[38;5;196m"
 C_PURPLE="\033[38;5;141m"
 C_GRAY="\033[38;5;245m"
+C_WHITE="\033[38;5;255m"
 
 show_banner() {
     clear 2>/dev/null || true

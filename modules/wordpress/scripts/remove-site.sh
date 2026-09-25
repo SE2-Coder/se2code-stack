@@ -98,8 +98,9 @@ if [ "$IS_LANDING" = false ]; then
     DB_NAME="wp_${SITE_SLUG}_db"
     DB_USER="wp_${SITE_SLUG}_user"
     MARIADB_ROOT_PASS=$(grep -E "^MYSQL_ROOT_PASSWORD=" "$STACK_ROOT/.env" 2>/dev/null | cut -d= -f2 || echo "root_secret")
+    MARIADB_CONTAINER=$(docker ps --format '{{.Names}}' 2>/dev/null | grep -E '^(wp-)?mariadb$' | head -n 1 || echo "mariadb")
 
-    docker exec mariadb mariadb -u root -p"$MARIADB_ROOT_PASS" --skip-ssl -e "
+    docker exec "$MARIADB_CONTAINER" mariadb -u root -p"$MARIADB_ROOT_PASS" --skip-ssl -e "
     DROP DATABASE IF EXISTS \`${DB_NAME}\`;
     DROP USER IF EXISTS '${DB_USER}'@'%';
     FLUSH PRIVILEGES;" 2>/dev/null || true
@@ -122,10 +123,14 @@ log_ok "Archivos web movidos a la papelera de seguridad: $TRASH_DIR"
 docker exec wp-nginx nginx -s reload 2>/dev/null || true
 docker restart wp-php84 wp-php85 >/dev/null 2>&1 || true
 
-# 6. Limpiar crons asociados a este sitio
-if [ -f "/etc/cron.d/wordpress-cron" ]; then
-    sed -i "/\/var\/www\/html\/$SITE_SLUG/d" "/etc/cron.d/wordpress-cron"
-    systemctl restart cron 2>/dev/null || true
+# 6. Limpiar crons asociados a este sitio (solo para WordPress)
+if [ "$IS_LANDING" = false ] && [ -f "/etc/cron.d/wordpress-cron" ]; then
+    if [ -w "/etc/cron.d/wordpress-cron" ]; then
+        sed -i "/\/var\/www\/html\/$SITE_SLUG/d" "/etc/cron.d/wordpress-cron" 2>/dev/null || true
+    elif command -v sudo >/dev/null 2>&1; then
+        sudo sed -i "/\/var\/www\/html\/$SITE_SLUG/d" "/etc/cron.d/wordpress-cron" 2>/dev/null || true
+    fi
+    sudo systemctl restart cron 2>/dev/null || systemctl restart cron 2>/dev/null || true
     log_ok "Reglas de cron eliminadas para [$SITE_SLUG]."
 fi
 

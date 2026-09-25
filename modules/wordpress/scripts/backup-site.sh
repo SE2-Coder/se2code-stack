@@ -70,13 +70,14 @@ do_single_backup() {
 
     # Bases de datos (si existen)
     if [ "$TYPE" = "full" ] || [ "$TYPE" = "db" ]; then
+        MARIADB_CONTAINER=$(docker ps --format '{{.Names}}' 2>/dev/null | grep -E '^(wp-)?mariadb$' | head -n 1 || echo "mariadb")
         MARIADB_ROOT_PASS=$(grep -E "^MYSQL_ROOT_PASSWORD=" "$STACK_ROOT/.env" 2>/dev/null | cut -d= -f2 || echo "root_secret")
         
         # Buscar todas las bases de datos del sitio (ej: wp_misitio_db, wp_misitio_es_db, etc.)
-        MATCHED_DBS=$(docker exec mariadb mariadb -u root -p"$MARIADB_ROOT_PASS" --skip-ssl -e "SHOW DATABASES LIKE 'wp\_${SLUG}\_%';" 2>/dev/null | grep -E "^wp_${SLUG}_" || true)
+        MATCHED_DBS=$(docker exec "$MARIADB_CONTAINER" mariadb -u root -p"$MARIADB_ROOT_PASS" --skip-ssl -e "SHOW DATABASES LIKE 'wp\_${SLUG}\_%';" 2>/dev/null | grep -E "^wp_${SLUG}_" || true)
         
         # Verificar también si existe base exacta wp_${SLUG}_db
-        EXACT_DB=$(docker exec mariadb mariadb -u root -p"$MARIADB_ROOT_PASS" --skip-ssl -e "SHOW DATABASES LIKE 'wp\_${SLUG}\_db';" 2>/dev/null | grep -E "^wp_${SLUG}_db" || true)
+        EXACT_DB=$(docker exec "$MARIADB_CONTAINER" mariadb -u root -p"$MARIADB_ROOT_PASS" --skip-ssl -e "SHOW DATABASES LIKE 'wp\_${SLUG}\_db';" 2>/dev/null | grep -E "^wp_${SLUG}_db" || true)
         if [ -n "$EXACT_DB" ] && ! echo "$MATCHED_DBS" | grep -q "^wp_${SLUG}_db$"; then
             MATCHED_DBS="${MATCHED_DBS} wp_${SLUG}_db"
         fi
@@ -85,7 +86,7 @@ do_single_backup() {
             for current_db in $MATCHED_DBS; do
                 DB_FILE="$TARGET_DIR/${current_db}_${DATE_TAG}.sql.gz"
                 log_info "Exportando y comprimiendo base de datos ($current_db)..."
-                docker exec mariadb mariadb-dump -u root -p"$MARIADB_ROOT_PASS" --skip-ssl --single-transaction --quick "$current_db" 2>/dev/null | gzip > "$DB_FILE"
+                docker exec "$MARIADB_CONTAINER" mariadb-dump -u root -p"$MARIADB_ROOT_PASS" --skip-ssl --single-transaction --quick "$current_db" 2>/dev/null | gzip > "$DB_FILE"
                 DB_SIZE=$(du -h "$DB_FILE" | cut -f1)
                 log_ok "Base de datos respaldada: $(basename "$DB_FILE") ($DB_SIZE)"
             done

@@ -94,7 +94,7 @@ while true; do
         [[ "$conf" =~ default ]] && continue
         if grep -q "proxy_pass" "$conf"; then
             APPS_COUNT=$((APPS_COUNT + 1))
-        elif grep -qi "\(Landing Page" "$conf"; then
+        elif grep -qi "Landing Page" "$conf"; then
             LANDING_COUNT=$((LANDING_COUNT + 1))
         else
             TOTAL_WP_COUNT=$((TOTAL_WP_COUNT + 1))

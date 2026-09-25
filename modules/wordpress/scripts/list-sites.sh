@@ -20,7 +20,7 @@ for conf in "${ALL_CONFS[@]}"; do
     slug=$(basename "$conf" .conf)
     if grep -q "proxy_pass" "$conf"; then
         APP_FILES+=("$conf")
-    elif grep -qi "\(Landing Page" "$conf" || [ -f "$STACK_ROOT/wp-data/$slug/index.html" -a ! -f "$STACK_ROOT/wp-data/$slug/wp-config.php" ]; then
+    elif grep -qi "Landing Page" "$conf" || [ -f "$STACK_ROOT/wp-data/$slug/index.html" -a ! -f "$STACK_ROOT/wp-data/$slug/wp-config.php" ]; then
         LANDING_FILES+=("$conf")
     else
         WP_FILES+=("$conf")

@@ -33,7 +33,7 @@ if [ -z "$SITE_SLUG" ]; then
         
         if grep -q "proxy_pass" "$conf"; then
             site_tag="${C_PURPLE}App Proxy${C_RESET}"
-        elif grep -qi "\(Landing Page" "$conf" || [ -f "$STACK_ROOT/wp-data/$s/index.html" -a ! -f "$STACK_ROOT/wp-data/$s/wp-config.php" ]; then
+        elif grep -qi "Landing Page" "$conf" || [ -f "$STACK_ROOT/wp-data/$s/index.html" -a ! -f "$STACK_ROOT/wp-data/$s/wp-config.php" ]; then
             if grep -q "fastcgi_pass" "$conf"; then
                 site_tag="${C_GREEN}Landing (HTML+PHP)${C_RESET}"
             else
@@ -70,7 +70,7 @@ fi
 VHOST_CONF="$STACK_ROOT/nginx/conf.d/${SITE_SLUG}.conf"
 IS_LANDING=false
 if [ -f "$VHOST_CONF" ]; then
-    if grep -qi "\(Landing Page" "$VHOST_CONF" || [ -f "$STACK_ROOT/wp-data/$SITE_SLUG/index.html" -a ! -f "$STACK_ROOT/wp-data/$SITE_SLUG/wp-config.php" ]; then
+    if grep -qi "Landing Page" "$VHOST_CONF" || [ -f "$STACK_ROOT/wp-data/$SITE_SLUG/index.html" -a ! -f "$STACK_ROOT/wp-data/$SITE_SLUG/wp-config.php" ]; then
         IS_LANDING=true
     fi
 fi

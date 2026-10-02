@@ -3,7 +3,7 @@
  * Plugin Name: se2Code Performance & Cloud Accelerator
  * Description: Elimina latencias de red, previene conflictos de caché, autoconfigura Nginx FastCGI + Redis y optimiza Elementor.
  * Author: se2Code
- * Version: 1.8.0
+ * Version: 1.8.1
  */
 
 if ( ! defined( 'ABSPATH' ) ) {
@@ -135,24 +135,7 @@ add_action( 'elementor/editor/before_enqueue_scripts', 'se2code_inject_elementor
 function se2code_inject_elementor_safeguards() {
     if ( ( isset( $_GET['action'] ) && 'elementor' === $_GET['action'] ) || isset( $_GET['elementor-preview'] ) ) {
         echo '<script data-cfasync="false">
-            /* se2Code Cloud Shield - Elementor Config & V2 Guards */
-            window.ElementorConfig = window.ElementorConfig || {
-                settings: { dynamicooo: false },
-                home_url: window.location.origin,
-                version: "3.35.5"
-            };
-            window.elementor = window.elementor || {};
-            if ( ! window.elementor.hooks ) {
-                var _noop = function() {};
-                window.elementor.hooks = {
-                    addAction: _noop,
-                    addFilter: function(t, v) { return v; },
-                    doAction: _noop,
-                    applyFilters: function(t, v) { return v; },
-                    removeAction: _noop,
-                    removeFilter: _noop
-                };
-            }
+            /* se2Code Cloud Shield - Elementor V2 Guards */
             window.elementorV2 = window.elementorV2 || {};
             window.elementorV2.editorCurrentUser = window.elementorV2.editorCurrentUser || {
                 useCurrentUserCapabilities: function() { return { isAdmin: true, canUser: function() { return true; }, capabilities: ["manage_options"] }; },
@@ -166,18 +149,6 @@ function se2code_inject_elementor_safeguards() {
         </script>';
     }
 }
-
-// Cache busting dinámico para assets de Elementor en el editor (evita cache obsoleto de Cloudflare)
-add_filter( 'script_loader_src', function( $src, $handle ) {
-    if ( strpos( $src, 'elementor' ) !== false ) {
-        if ( isset( $_GET['action'] ) && 'elementor' === $_GET['action'] ) {
-            $src = add_query_arg( 'se2v', (string) ( intval( time() / 300 ) ), $src ); // Rota cada 5 min en el editor
-        } else {
-            $src = add_query_arg( 'se2v', '5', $src );
-        }
-    }
-    return $src;
-}, 99, 2 );
 
 // Desactivar telemetria de Elementor
 add_filter( 'elementor/tracker/send_tracking_data_params', '__return_empty_array' );
